@@ -1,0 +1,49 @@
+# Zip du projet
+*.zip
+
+# Fichiers générés par Airflow
+logs/
+dags/__pycache__/
+plugins/__pycache__/
+airflow.cfg
+unittests.cfg
+
+# SQLite database (for local development)
+airflow.db
+*.encode
+
+# Fichiers de configuration et sensibles
+*.pyc
+*.pyo
+__pycache__/
+
+# Environment variables and credentials
+.env
+.env.*
+app/keys/*
+
+# Fichiers de logs
+*.log
+*.out
+*.err
+envs.sh
+
+# Docker
+docker-compose.override.yml
+docker-compose.override.yaml
+docker-compose.yml
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Temp
+temp/*
+
+# Keys & Secure
+keys/*
+secure/*
+
+# Old tasks
+app/old_tasks/*
+
