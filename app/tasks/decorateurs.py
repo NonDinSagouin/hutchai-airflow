@@ -8,6 +8,8 @@ def customTask(func):
 
     @functools.wraps(func)
     def wrapper(**kwargs):
+        # Extraire task_id des kwargs s'il existe
+        task_id = kwargs.pop('task_id', None)
 
         # Logging de début
         logging_title("🚀 Démarrage de la tâche", lvl=1)
@@ -20,4 +22,12 @@ def customTask(func):
 
         return result
 
-    return task(wrapper)
+    # Appliquer le décorateur @task avec task_id si fourni
+    def task_wrapper(**kwargs):
+        task_id = kwargs.get('task_id', None)
+        if task_id:
+            return task(task_id=task_id)(wrapper)(**kwargs)
+        else:
+            return task(wrapper)(**kwargs)
+    
+    return task_wrapper

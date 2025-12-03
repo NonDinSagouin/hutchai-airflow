@@ -1,62 +1,44 @@
-services:
-  spark-master:
-    build:
+x-spark-common: &spark-common
+  build:
       context: .
       dockerfile: build/spark.dockerfile
+  environment:
+    SPARK_NO_DAEMONIZE: "true"
+    PYSPARK_PYTHON: "python3"
+  networks:
+    - spark-net
+    - airflow_default
+  restart: always
+
+x-worker-common: &worker-common
+  << : *spark-common
+  command: >
+    /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker
+    spark://spark-master:7077
+    --cores 2
+    --memory 3G
+  mem_limit: 4g
+  cpus: 2
+  depends_on:
+    - spark-master
+
+services:
+  spark-master:
+    << : *spark-common
     container_name: spark-master
     command: >
       /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
       --host spark-master
-    environment:
-      SPARK_NO_DAEMONIZE: "true"
     ports:
       - "8090:8080"
       - "7077:7077"
     mem_limit: 2g
-    cpus: 2
-    networks:
-      - spark-net
-      - airflow_default
-    restart: always
+    cpus: 1
 
   spark-worker-1:
-    build:
-      context: .
-      dockerfile: build/spark.dockerfile
+    << : *worker-common
     container_name: spark-worker-1
-    command: >
-      /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker
-      spark://spark-master:7077
-      --cores 3
-      --memory 4G
-    environment:
-      SPARK_NO_DAEMONIZE: "true"
-      PYSPARK_PYTHON: "python3"
-    mem_limit: 4g
-    cpus: 3
-    depends_on:
-      - spark-master
-    networks:
-      - spark-net
-      - airflow_default
 
   spark-worker-2:
-    build:
-      context: .
-      dockerfile: build/spark.dockerfile
+    << : *worker-common
     container_name: spark-worker-2
-    command: >
-      /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker
-      spark://spark-master:7077
-      --cores 3
-      --memory 4G
-    environment:
-      SPARK_NO_DAEMONIZE: "true"
-      PYSPARK_PYTHON: "python3"
-    mem_limit: 4g
-    cpus: 3
-    depends_on:
-      - spark-master
-    networks:
-      - spark-net
-      - airflow_default
