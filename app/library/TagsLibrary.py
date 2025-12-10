@@ -12,6 +12,10 @@ class TagsLibrary():
         DB_A2PO (str): Tag pour les interactions avec la base de données A2PO.
         DB_NOISETTE (str): Tag pour les interactions avec la base de données Noisette.
         DB_USERS (str): Tag pour les interactions avec la base de données des utilisateurs.
+
+    exemple:
+        >>> print(TagsLibrary.DATA_INSERTION)
+        data_insertion
     """
 
     # Définissez des tags comme des constantes de classe

@@ -1,29 +1,34 @@
 import logging
 import requests
+import pandas as pd
 
 import app.manager as manager
-
 from app.tasks.decorateurs import customTask
 
-class Providers():
+class ApiProviders():
 
     @customTask
     @staticmethod
-    def api_get(
+    def get(
         conn_id : str = None,
         endpoint: str = None,
-        task_id : str = 'task_API_get',
+        to_dataframe: bool = True,
+        xcom_strategy: str = 'auto',
+        file_format: str = 'parquet',
         **kwargs
-    ) -> None:
+    ) -> list | pd.DataFrame:
         """ Tâche basique d'exemple qui imprime un message de bienvenue.
 
         Args:
-            name (str, optional): Nom à saluer. Defaults to 'strenger'.
+            conn_id (str, optional): Identifiant de la connexion API. Defaults to None.
+            endpoint (str, optional): Endpoint de l'API à appeler. Defaults to None.
+            to_dataframe (bool, optional): Convertir les données en DataFrame pandas. Defaults to True.
+            xcom_strategy (str, optional): Stratégie de stockage XCom ('auto', 'direct', 'file'). Defaults to 'auto'.
         """
 
         if conn_id is None:
             raise ValueError("La connexion ID 'conn_id' doit être fournie.")
-        
+
         if endpoint is None:
             raise ValueError("L'endpoint de l'API doit être fourni.")
 
@@ -35,12 +40,20 @@ class Providers():
         try:
             response = requests.get(url, headers=http_details.get('headers'))
             response.raise_for_status()
-            
+
             data = response.json()
             logging.info(f"Données récupérées avec succès: {len(data.get('data', {}))} éléments.")
-            
-            return data
-            
+
+            if to_dataframe:
+                data = pd.json_normalize(data)
+
+            return manager.Xcom.put(
+                input=data,
+                xcom_strategy=xcom_strategy,
+                file_format=file_format,
+                **kwargs
+            )
+
         except requests.exceptions.RequestException as e:
             logging.error(f"Erreur lors de l'appel API: {e}")
             raise

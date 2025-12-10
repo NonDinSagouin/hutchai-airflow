@@ -5,7 +5,7 @@ import gc
 from pyspark.sql import functions as F
 
 from app.tasks.decorateurs import customTask
-from app.manager.SparkSessionManager import SparkSessionManager
+from app.manager.Spark import Spark
 
 class Stress_test():
 
@@ -15,7 +15,7 @@ class Stress_test():
         """Test les limites mémoire de Spark."""
 
         try:
-            spark = SparkSessionManager.get(**kwargs)
+            spark = Spark.get(**kwargs)
 
             logging.info("=== DÉBUT DU TEST DE STRESS MÉMOIRE SPARK ===")
             logging.info(f"Configuration Spark: {spark.sparkContext.getConf().getAll()}")
@@ -171,7 +171,7 @@ class Stress_test():
             raise
 
         finally:
-            SparkSessionManager.close()
+            Spark.close()
 
     @customTask
     @staticmethod
@@ -179,7 +179,7 @@ class Stress_test():
         """Test les limites CPU de Spark avec monitoring détaillé."""
 
         try:
-            spark = SparkSessionManager.get(**kwargs)
+            spark = Spark.get(**kwargs)
 
             logging.info("=== DÉBUT DU TEST DE STRESS CPU SPARK ===")
             logging.info(f"Configuration Spark: {spark.sparkContext.getConf().getAll()}")
@@ -405,4 +405,4 @@ class Stress_test():
             raise
 
         finally:
-            SparkSessionManager.close()
+            Spark.close()

@@ -1,5 +1,8 @@
 import sys
 import os
+import pandas as pd
+import logging
+import requests
 
 from datetime import datetime, timedelta
 
@@ -8,12 +11,13 @@ from airflow.sdk import chain, TaskGroup
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-import app.tasks.data_extraction as data_extraction
-import app.tasks.warehouse as warehouse
+import app.tasks.extraction as extraction
+import app.tasks.load as load
+import app.tasks.transformation as transformation
+import app.helper as helper
+import app.manager as manager
 
-from app import manager
 from app.tasks.decorateurs import customTask
-
 
 DAG_ID = "LOL_referentiel"
 DESCRIPTION = ""
@@ -26,7 +30,7 @@ default_args = {
     'retry_delay': timedelta(seconds=10), # Temps entre chaque tentative
 }
 
-class CustomTask():
+class Custom():
 
     @customTask
     @staticmethod
@@ -34,12 +38,51 @@ class CustomTask():
         xcom_source : str,
         **context
     ):
-        ti = context['ti']
-        data = ti.xcom_pull(task_ids=xcom_source)
-        champions = data['data'].keys()
 
-        print("Liste des champions :", champions)
-        return list(champions)
+        data_xcom = manager.Xcom.get(xcom_source=xcom_source, to_df=False, **context)
+        champions_data = data_xcom["data"]
+
+        # Créer une liste des champions avec les informations demandées
+        champions_list = []
+        for _, champion_info in champions_data.items():
+            # Convertir les tags en string JSON pour éviter le problème numpy.ndarray
+            tags = champion_info.get('tags', [])
+            tags_str = ','.join(tags) if tags else ''
+
+            champion = {
+                'name': champion_info.get('name', ''),
+                'id': champion_info.get('id', ''),
+                'key': champion_info.get('key', ''),
+                'title': champion_info.get('title', ''),
+                'description': champion_info.get('blurb', ''),  # La description est dans 'blurb'
+                'tags': tags_str
+            }
+            champions_list.append(champion)
+
+        # Convertir la liste en DataFrame pandas
+        champions_df = pd.DataFrame(champions_list)
+
+        return manager.Xcom.put(
+            input=champions_df,
+            xcom_strategy='file',
+            **context
+        )
+
+    @staticmethod
+    def get_ddragon_version() -> str:
+        """ Récupère la dernière version de DDragon depuis l'API.
+
+        Returns:
+            str: Dernière version de DDragon
+        """
+        http_details = manager.Connectors.http(conn_id="API_LOL_ddragon")
+        url = f"{http_details['host']}/api/versions.json"
+
+        response = requests.get(url, headers=http_details.get('headers'))
+        response.raise_for_status()
+        data = response.json()
+
+        return data[0]
 
 # Définition du DAG
 with DAG(
@@ -60,29 +103,43 @@ with DAG(
         {OBJECTIF}
     """,
 ) as dag:
-    
-    task_get_champions_list = data_extraction.Providers.api_get(
-        task_id="task_get_champions_list",
+
+    task_get_champions_list = extraction.ApiProviders.get(
         conn_id="API_LOL_ddragon",
-        endpoint="/cdn/15.23.1/data/fr_FR/champion.json",
+        endpoint=f"/cdn/{Custom.get_ddragon_version()}/data/fr_FR/champion.json",
+        to_dataframe=False,
+        xcom_strategy='file',
+        file_format='json',
+        task_id="task_get_champions_list",
     )
 
-    task_list_champions = CustomTask.list_champions(
+    task_list_champions = Custom.list_champions(
         task_id="task_list_champions",
         xcom_source="task_get_champions_list",
     )
 
-    task_insert_champions_list = warehouse.Insert.basic(
-        task_id="task_insert_champions_list",
+    task_add_tech_info = transformation.AddColumns.tech_info(
+        task_id="task_add_tech_info",
         xcom_source="task_list_champions",
+    )
+
+    task_add_tech_photo = transformation.AddColumns.tech_photo(
+        task_id="task_add_tech_date",
+        xcom_source="task_add_tech_info",
+    )
+
+    task_insert_champions_list = load.Warehouse.snapshot_by_period(
+        task_id="task_insert_champions_list",
+        xcom_source="task_add_tech_date",
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
         table_name="ref_champions",
         schema="lol_referentiel",
-        if_table_exists="replace",
     )
 
     chain(
         task_get_champions_list,
         task_list_champions,
+        task_add_tech_info,
+        task_add_tech_photo,
         task_insert_champions_list,
     )

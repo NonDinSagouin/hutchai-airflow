@@ -1,1 +1,0 @@
-from app.tasks.exemple.Basic import Basic

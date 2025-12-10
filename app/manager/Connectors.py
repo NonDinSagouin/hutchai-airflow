@@ -1,7 +1,7 @@
 import logging
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.exceptions import AirflowFailException
-from airflow.hooks.base import BaseHook
+from airflow.sdk.bases.hook import BaseHook
 
 from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
@@ -42,7 +42,7 @@ class Connectors:
             }
 
             logging.info(f"✅ Connexion HTTP '{conn_id}' configurée avec succès.")
-            logging.info(f"Détails de la connexion HTTP: ")
+            logging.info("Détails de la connexion HTTP: ")
             logging.info(f"host: {http_details['host']}")
             logging.info(f"schema: {http_details['schema']}")
             logging.info(f"port: {http_details['port']}")
@@ -53,12 +53,12 @@ class Connectors:
 
         except Exception as e:
             raise AirflowFailException(f"Erreur lors de la configuration de la connexion HTTP: {e}") from e
-        
+
     @staticmethod
     def postgres(
         conn_id: str
     ) -> Engine:
-        
+
         hook = PostgresHook(postgres_conn_id=conn_id)
 
         try:

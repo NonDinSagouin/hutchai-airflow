@@ -127,7 +127,7 @@ class Basic():
         """Crée un DataFrame Spark et le convertit en pandas DataFrame."""
 
         try:
-            spark = manager.SparkSessionManager.get(**kwargs)
+            spark = manager.Spark.get(**kwargs)
 
             # Créer un DataFrame simple
             df = spark.createDataFrame(
@@ -141,4 +141,4 @@ class Basic():
             return result
         finally:
             # Toujours fermer la session Spark
-            manager.SparkSessionManager.close(**kwargs)
+            manager.Spark.close(**kwargs)

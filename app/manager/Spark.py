@@ -2,14 +2,14 @@ import logging
 import socket
 
 from pyspark.sql import SparkSession
-from airflow.hooks.base import BaseHook
+from airflow.sdk.bases.hook import BaseHook
 from airflow.exceptions import AirflowFailException
 
 import app.helper as helper
 
-class SparkSessionManager:
+class Spark:
     """Gestionnaire de SparkSession pour Airflow."""
-    
+
     __session: dict[str, SparkSession] = {}
 
     @staticmethod
@@ -54,7 +54,7 @@ class SparkSessionManager:
         task_id = kwargs.get("task_id", "default_task_id")
         app_name = app_name or task_id
 
-        if app_name not in SparkSessionManager.__session and not SparkSessionManager.__set(
+        if app_name not in Spark.__session and not Spark.__set(
             conn_id=conn_id,
             app_name=app_name,
             driver_memory=driver_memory,
@@ -69,10 +69,10 @@ class SparkSessionManager:
             spark_configs=spark_configs,
         ):
             raise AirflowFailException("Impossible de créer une SparkSession Spark.")
-        
+
         helper.logging_title("✅ SparkSession obtenue.", lvl=3, close=True)
 
-        return SparkSessionManager.__session[app_name]
+        return Spark.__session[app_name]
 
     @staticmethod
     def close(
@@ -89,24 +89,24 @@ class SparkSessionManager:
         task_id = kwargs.get("task_id", "default_task_id")
         app_name = app_name or task_id
 
-        if app_name not in SparkSessionManager.__session:
+        if app_name not in Spark.__session:
             logging.warning("⚠️ Aucune SparkSession active à fermer.")
             return
-        
+
         try:
             logging.info("⏳ Fermeture de la SparkSession...")
-            SparkSessionManager.__session[app_name].stop()
+            Spark.__session[app_name].stop()
             logging.info("✅ SparkSession fermée.")
-            
-            del SparkSessionManager.__session[app_name]
+
+            del Spark.__session[app_name]
             logging.info("✅ SparkSession réinitialisée.")
-        
+
         except Exception as e:
             raise AirflowFailException("❌ Échec de la fermeture de la SparkSession.") from e
-        
+
         finally:
-            if app_name in SparkSessionManager.__session:
-                del SparkSessionManager.__session[app_name]  # Réinitialiser quand même
+            if app_name in Spark.__session:
+                del Spark.__session[app_name]  # Réinitialiser quand même
             return
 
     @staticmethod
@@ -126,7 +126,7 @@ class SparkSessionManager:
     ) -> bool:
         """Configure et retourne une SparkSession à partir d'une connexion Airflow."""
 
-        if app_name in SparkSessionManager.__session:
+        if app_name in Spark.__session:
             logging.warning("⚠️ Une SparkSession existe déjà. Utilisation de la session existante.")
             return False
 
@@ -167,16 +167,16 @@ class SparkSessionManager:
                 .config("spark.sql.shuffle.partitions", sql_shuffle_partitions) \
                 .config("spark.executor.heartbeatInterval", executor_heartbeat_interval) \
                 .config("spark.network.timeout", network_timeout)
-            
+
             # Ajouter les configurations supplémentaires si fournies
             if spark_configs:
                 for key, value in spark_configs.items():
                     builder = builder.config(key, value)
-            
-            SparkSessionManager.__session[app_name] = builder.getOrCreate()
+
+            Spark.__session[app_name] = builder.getOrCreate()
 
             # Vérifier que les executors sont bien connectés
-            sc = SparkSessionManager.__session[app_name].sparkContext
+            sc = Spark.__session[app_name].sparkContext
             logging.info("🔵 VÉRIFICATION DE LA CONNEXION SPARK 🔵")
             logging.info(f"🔹Application ID: {sc.applicationId}")
             logging.info(f"🔹Master URL: {sc.master}")
