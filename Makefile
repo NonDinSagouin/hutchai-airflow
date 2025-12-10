@@ -1,13 +1,15 @@
+PROJECT_NAME=hutchai-airflow
+
 # Variables
 DC=docker compose
 COMPOSE_FILE = ./docker-compose.yml
 backupKey=K2Hf9UR96wmcQRwZ5CsJwPlQc
 
 # Nom du service Airflow dans Docker Compose
-SERVICE=airflow-airflow-apiserver-1
-SCHEDULER=airflow-airflow-scheduler-1
-TRIGGERER=airflow-airflow-triggerer-1
-WORKER=airflow-airflow-worker-1
+SERVICE=$(PROJECT_NAME)-airflow-apiserver-1
+SCHEDULER=$(PROJECT_NAME)-airflow-scheduler-1
+TRIGGERER=$(PROJECT_NAME)-airflow-triggerer-1
+WORKER=$(PROJECT_NAME)-airflow-worker-1
 
 FILE_SECURE=./secure
 FILE_KEYS=./keys

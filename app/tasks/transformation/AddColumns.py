@@ -2,12 +2,8 @@ import pandas as pd
 import logging
 import pendulum
 
-from sqlalchemy.engine import Engine
-from sqlalchemy import text
-from airflow.exceptions import AirflowFailException
-
-import app.helper as helper
 import app.manager as manager
+
 from app.tasks.decorateurs import customTask
 
 class AddColumns():
@@ -30,18 +26,38 @@ class AddColumns():
             # Fallback sur ds (date string) si ni logical_date ni execution_date ne sont disponibles
             execution_date = pendulum.parse(kwargs['ds']).in_timezone(pendulum.timezone(PARIS_TZ))
 
+        logging.debug(f"📅 Date d'exécution récupérée : {execution_date}")
+
         return execution_date
 
     @customTask
     @staticmethod
     def tech_info(
         xcom_source : str,
+        xcom_strategy: str = 'auto',
+        file_format: str = 'parquet',
         **kwargs
-    ) -> pd.DataFrame:
+    ) -> pd.DataFrame | dict | str:
         """ Ajoute des colonnes techniques à un DataFrame extrait d'un XCom.
 
         Args:
             xcom_source (str): Identifiant de la tâche source pour extraire le DataFrame
+            xcom_strategy (str, optional): Stratégie de stockage XCom ('auto', 'direct', 'file'). Defaults to 'auto'.
+            file_format (str, optional): Format de fichier pour le stockage XCom ('json' ou 'parquet'). Defaults to 'parquet'.
+
+        Returns:
+            pd.DataFrame | dict | str: Donnée avec les colonnes techniques ajoutées, sous forme de DataFrame, dictionnaire ou chaîne de caractères selon les paramètres.
+
+        Examples:
+            >>> df_with_tech_info = AddColumns.tech_info(
+            ...     xcom_source="extract_data_task",
+            ...     xcom_strategy="auto",
+            ...     file_format="parquet",
+            ...     **kwargs
+            ... )
+            >>> print(df_with_tech_info.head())
+                column1  column2        tech_dag_id     tech_execution_date
+            0        ...     ...        example_dag     2024-07-22 01:00:00
         """
 
         df_xcom = manager.Xcom.get(xcom_source, **kwargs)
@@ -50,7 +66,14 @@ class AddColumns():
         df_xcom['tech_dag_id'] = kwargs['dag'].dag_id
         df_xcom['tech_execution_date'] = execution_date.strftime("%Y-%m-%d %H:%M:%S")
 
-        return df_xcom
+        logging.info("✅ Colonnes techniques 'tech_dag_id' et 'tech_execution_date' ajoutées au DataFrame.")
+
+        return manager.Xcom.put(
+            input=df_xcom,
+            xcom_strategy=xcom_strategy,
+            file_format=file_format,
+            **kwargs
+        )
 
     @customTask
     @staticmethod
@@ -59,6 +82,8 @@ class AddColumns():
         date_column: str = "tech_date_photo",
         year_column: str = "tech_annee_photo",
         week_column: str = "tech_semaine_photo",
+        xcom_strategy: str = 'auto',
+        file_format: str = 'parquet',
         **kwargs
     ) -> pd.DataFrame:
         """ Ajoute des colonnes techniques à un DataFrame extrait d'un XCom.
@@ -68,6 +93,11 @@ class AddColumns():
             date_column (str, optional): Nom de la colonne pour la date d'exécution. Defaults to "tech_date_photo".
             year_column (str, optional): Nom de la colonne pour l'année d'exécution. Defaults to "tech_annee_photo".
             week_column (str, optional): Nom de la colonne pour la semaine d'exécution. Defaults to "tech_semaine_photo".
+            xcom_strategy (str, optional): Stratégie de stockage XCom ('auto', 'direct', 'file'). Defaults to 'auto'.
+            file_format (str, optional): Format de fichier pour le stockage XCom ('json' ou 'parquet'). Defaults to 'parquet'.
+
+        Returns:
+            pd.DataFrame: DataFrame avec les colonnes techniques ajoutées
         """
 
         df_xcom = manager.Xcom.get(xcom_source, **kwargs)
@@ -79,4 +109,11 @@ class AddColumns():
         df_xcom[year_column] = iso_year_today
         df_xcom[week_column] = iso_week_today
 
-        return df_xcom
+        logging.info(f"✅ Colonnes techniques '{date_column}', '{year_column}' et '{week_column}' ajoutées au DataFrame.")
+
+        return manager.Xcom.put(
+            input=df_xcom,
+            xcom_strategy=xcom_strategy,
+            file_format=file_format,
+            **kwargs
+        )

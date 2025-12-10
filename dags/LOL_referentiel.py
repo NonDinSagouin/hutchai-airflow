@@ -20,8 +20,8 @@ import app.manager as manager
 from app.tasks.decorateurs import customTask
 
 DAG_ID = "LOL_referentiel"
-DESCRIPTION = ""
-OBJECTIF = ""
+DESCRIPTION = "Ce DAG extrait, transforme et charge les données des champions League of Legends depuis l'API DDragon vers l'entrepôt de données."
+OBJECTIF = "Extraire, transformer et charger les données des champions League of Legends dans l'entrepôt de données."
 
 default_args = {
     'owner': 'airflow',
@@ -38,6 +38,14 @@ class Custom():
         xcom_source : str,
         **context
     ):
+        """ Crée une liste des champions avec les informations demandées.
+
+        Args:
+            xcom_source (str): Source XCom contenant les données brutes des champions.
+
+        Returns:
+            pd.DataFrame: DataFrame contenant la liste des champions avec les informations demandées.
+        """
 
         data_xcom = manager.Xcom.get(xcom_source=xcom_source, to_df=False, **context)
         champions_data = data_xcom["data"]
@@ -128,12 +136,13 @@ with DAG(
         xcom_source="task_add_tech_info",
     )
 
-    task_insert_champions_list = load.Warehouse.snapshot_by_period(
+    task_insert_champions_list = load.Warehouse.insert(
         task_id="task_insert_champions_list",
         xcom_source="task_add_tech_date",
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
         table_name="ref_champions",
         schema="lol_referentiel",
+        if_table_exists="replace",
     )
 
     chain(

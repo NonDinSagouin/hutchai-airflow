@@ -1,6 +1,6 @@
 import logging
 
-def logging_title(text: str, lvl: int = 1, close: bool = False):
+def logging_title(text: str, lvl: int = 1, close: bool = False) -> None:
     """ Enregistre un titre formaté dans les logs avec plusieurs niveaux.
 
     Args:
@@ -11,7 +11,11 @@ def logging_title(text: str, lvl: int = 1, close: bool = False):
             - 3: Section (*** ouverture/fermeture)
             - 4: Sous-section (+++ ouverture/fermeture)
             - 5: Paragraphe (... haut uniquement)
+        close (bool, optionnel): Indique si le titre doit être fermé (True) ou ouvert (False). Par défaut à False.
 
+    Returns:
+        None
+        
     Examples:
         >>> logging_title(
         ...     "Démarrage du processus",
@@ -37,9 +41,9 @@ def logging_title(text: str, lvl: int = 1, close: bool = False):
     """
 
     if not isinstance(text, str):
-        raise ValueError("Le paramètre 'text' doit être une chaîne de caractères.")
+        raise ValueError("❌ Le paramètre 'text' doit être une chaîne de caractères.")
     if lvl not in [1, 2, 3, 4, 5]:
-        raise ValueError("Le paramètre 'lvl' doit être compris entre 1 et 5.")
+        raise ValueError("❌ Le paramètre 'lvl' doit être compris entre 1 et 5.")
 
     # Configuration des patterns selon le niveau
     patterns = {

@@ -16,7 +16,7 @@ class ApiProviders():
         xcom_strategy: str = 'auto',
         file_format: str = 'parquet',
         **kwargs
-    ) -> list | pd.DataFrame:
+    ) -> pd.DataFrame | dict | str:
         """ Tâche basique d'exemple qui imprime un message de bienvenue.
 
         Args:
@@ -24,28 +24,44 @@ class ApiProviders():
             endpoint (str, optional): Endpoint de l'API à appeler. Defaults to None.
             to_dataframe (bool, optional): Convertir les données en DataFrame pandas. Defaults to True.
             xcom_strategy (str, optional): Stratégie de stockage XCom ('auto', 'direct', 'file'). Defaults to 'auto'.
+            file_format (str, optional): Format de fichier pour le stockage XCom ('json' ou 'parquet'). Defaults to 'parquet'.
+
+        Returns:
+            pd.DataFrame | dict | str: Données récupérées depuis l'API, sous forme de DataFrame, dictionnaire ou chaîne de caractères selon les paramètres.
+
+        Examples:
+            >>> ApiProviders.get(
+            ...     conn_id="my_api_connection",
+            ...     endpoint="/data",
+            ...     to_dataframe=True,
+            ...     xcom_strategy="auto",
+            ...     file_format="parquet"
+            ... )
+            Appel API vers: https://api.example.com/data
+            Données récupérées avec succès: 150 éléments.
         """
 
         if conn_id is None:
-            raise ValueError("La connexion ID 'conn_id' doit être fournie.")
+            raise ValueError("❌ La connexion ID 'conn_id' doit être fournie.")
 
         if endpoint is None:
-            raise ValueError("L'endpoint de l'API doit être fourni.")
+            raise ValueError("❌ L'endpoint de l'API doit être fourni.")
 
         http_details = manager.Connectors.http(conn_id)
 
         url = f"{http_details['host']}{endpoint}"
-        logging.info(f"Appel API vers: {url}")
+        logging.info(f"⏳ Appel API vers: {url}")
 
         try:
             response = requests.get(url, headers=http_details.get('headers'))
             response.raise_for_status()
 
             data = response.json()
-            logging.info(f"Données récupérées avec succès: {len(data.get('data', {}))} éléments.")
+            logging.info(f"✅ Données récupérées avec succès: {len(data.get('data', {}))} éléments.")
 
             if to_dataframe:
                 data = pd.json_normalize(data)
+                logging.info(f"✅ Données converties en DataFrame pandas avec succès. Dimensions: {data.shape}.")
 
             return manager.Xcom.put(
                 input=data,
@@ -55,5 +71,5 @@ class ApiProviders():
             )
 
         except requests.exceptions.RequestException as e:
-            logging.error(f"Erreur lors de l'appel API: {e}")
+            logging.error(f"❌ Erreur lors de l'appel API: {e}")
             raise

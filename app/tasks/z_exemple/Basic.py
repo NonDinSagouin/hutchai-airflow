@@ -8,23 +8,34 @@ import app.manager as manager
 from app.tasks.decorateurs import customTask
 
 class Basic():
+    """ Classe de tâches basiques d'exemple. """
 
     @customTask
     @staticmethod
     def hello(
-        name:str = 'strenger',
+        name : str = 'strenger',
         **kwargs
     ) -> None:
         """ Tâche basique d'exemple qui imprime un message de bienvenue.
 
         Args:
             name (str, optional): Nom à saluer. Defaults to 'strenger'.
+
+        Returns:
+            None
+
+        Examples:
+            >>> Basic.hello(
+            ...     name="Alice",
+            ...     **kwargs
+            ... )
+            ✅ Welcome Alice, from Basic task!
         """
-        logging.info(f"Welcome {name}, from Basic task!")
+        logging.info(f"✅ Welcome {name}, from Basic task!")
 
     @customTask
     @staticmethod
-    def xcom(
+    def xcom_put(
         var_test: str,
         **kwargs
     ) -> dict:
@@ -35,96 +46,47 @@ class Basic():
 
         Returns:
             dict: Dictionnaire de données à pousser dans XCom.
+
+        Examples:
+            >>> Basic.xcom_put(
+            ...     var_test="TestValue",
+            ...     **kwargs
+            ... )
+            ℹ️ Variable de test reçue: TestValue
+            ✅ Données poussées dans XCom: {'example_key': 'example_value', 'number': 123, 'status': 'completed', 'var_test': 'TestValue'}
         """
 
-        ti = kwargs['task_instance']
+        data = {
+            "example_key": "example_value",
+            "number": 123,
+            "status": "completed",
+            "var_test": var_test,
+        }
 
-        logging.info(f"Variable reçue : {var_test}")
+        logging.info(f"ℹ️ Variable de test reçue: {var_test}")
 
-        try:
-            logging.info("Exécution de la tâche Basic")
-
-            # Push de XComs spécifiques avec des clés
-            ti.xcom_push(key="key1", value="Valeur pour key1")
-            ti.xcom_push(key="key2", value={"data": "Valeur pour key2", "count": 42})
-            ti.xcom_push(key="metadata", value=[1, 2, 3, 4, 5])
-
-                # Retour principal (sera stocké avec key="return_value")
-            return {
-                "main_result": "Données principales",
-                "status": "success",
-                "processed_items": 10
-            }
-
-        except Exception as e:
-            logging.error(f"Erreur dans Basic: {e}")
-            raise
-
-    @customTask
-    @staticmethod
-    def call_API(
-        http_conn_id: str,
-        endpoint: str,
-        method: str = "GET",
-        headers: dict = None,
-        log_response: bool = True,
-        **kwargs
-    ):
-        """ Permet d'appeler une API externe et de traiter la réponse.
-        """
-        import requests
-        from airflow.hooks.base import BaseHook
-
-        try:
-            conn = BaseHook.get_connection(http_conn_id)
-            host = conn.host
-
-            url = f"{host}{endpoint}"
-
-            response = requests.request(method, url, headers=headers)
-            response.raise_for_status()
-
-            if log_response: logging.info(f"Réponse de l'API: {response.text}")
-
-            return response.json()
-
-        except requests.exceptions.RequestException as e:
-            logging.error(f"Erreur lors de l'appel API: {e}")
-            raise
-
-    @customTask
-    @staticmethod
-    def insert_warehouse(
-        df: list,
-        table_name: str = "test_table",
-        schema: str = "public",
-        chunksize: int = 1000,
-        method : str = None,
-        if_table_exists: str = "append",
-        **kwargs
-    ):
-        """ Insère des données dans un entrepôt de données (Data Warehouse).
-
-        Args:
-            data (list): Liste de dictionnaires représentant les données à insérer
-            table_name (str): Nom de la table de destination
-        """
-        import pandas as pd
-
-        try:
-            engine = manager.Connectors.postgres("POSTGRES_warehouse")
-            df.to_sql(name=table_name, schema=schema ,con=engine, if_exists=if_table_exists, index=False, chunksize=chunksize, method=method,)
-
-        except Exception as e:
-            logging.error(f"Erreur lors de l'insertion dans le Data Warehouse: {e}")
-            raise
+        return manager.Xcom.put(
+            input=data,
+            xcom_strategy="auto",
+            **kwargs
+        )
 
     @customTask
     @staticmethod
     def spark_df(
         **kwargs
     ) -> pd.DataFrame:
-        """Crée un DataFrame Spark et le convertit en pandas DataFrame."""
+        """Crée un DataFrame Spark et le convertit en pandas DataFrame.
+
+        Returns:
+            pd.DataFrame: Le DataFrame converti en pandas.
+
+        Examples:
+            >>> Basic.spark_df(
+            ...     **kwargs
+            ... )
+            ✅ DataFrame Spark converti en pandas DataFrame avec succès.
+        """
 
         try:
             spark = manager.Spark.get(**kwargs)
@@ -138,7 +100,48 @@ class Basic():
 
             # Convertir en pandas et retourner
             result = df.toPandas()
-            return result
+            logging.info("✅ DataFrame Spark converti en pandas DataFrame avec succès.")
+
+            return manager.Xcom.put(
+                input=result,
+                xcom_strategy="file",
+                file_format="parquet",
+                **kwargs
+            )
         finally:
             # Toujours fermer la session Spark
             manager.Spark.close(**kwargs)
+
+    @customTask
+    @staticmethod
+    def xcom_get(
+        xcom_source: str,
+        **kwargs
+    ) -> bool:
+        """ Lit les données depuis XCom et les retourne.
+
+        Args:
+            xcom_source (str): L'ID de la tâche source pour lire les données XCom.
+
+        Returns:
+            bool: True si la lecture a réussi.
+
+        Examples:
+            >>> Basic.xcom_get(
+            ...     xcom_source="previous_task_id",
+            ...     **kwargs
+            ... )
+            ✅ Données lues depuis XCom: {'example_key': 'example_value', 'number': 123, 'status': 'completed', 'var_test': 'TestValue'}
+        """
+
+        data = manager.Xcom.get(
+            xcom_source=xcom_source,
+            **kwargs
+        )
+
+        if data is None:
+            raise AirflowFailException("❌ Aucune donnée trouvée dans XCom.")
+
+        logging.info(f"✅ Données lues depuis XCom: {data}")
+
+        return True

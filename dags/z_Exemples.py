@@ -12,8 +12,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 import app.tasks.z_exemple as z_exemple
 
 DAG_ID = "z_exemple_dag"
-DESCRIPTION = "Ce DAG extrait des données depuis SQL Server d'A2PO et BigQuery de GCP, puis les transmet sous forme de liste dans le XCom."
-OBJECTIF = "Valider les étapes d'extraction des données depuis BigQuery et SQL Server."
+DESCRIPTION = "Ce DAG sert d'exemple pour démontrer diverses fonctionnalités d'Airflow."
+OBJECTIF = "Illustrer l'utilisation des tâches de base, des groupes de tâches, et des échanges de données via XCom dans un DAG Airflow."
 
 default_args = {
     'owner': 'airflow',
@@ -47,41 +47,32 @@ with DAG(
         name="Airflow User",
     )
 
-    task_basic_xcom = z_exemple.Basic.xcom(
-        task_id="task_basic_xcom",
-        var_test="Test de la tâche basic",
-    )
+    with TaskGroup("groupe_load") as groupe_load:
 
-    task_spark = z_exemple.Basic.spark_df(
-        task_id="task_spark_df",
-    )
-    
-    with TaskGroup("groupe_call_API") as groupe_call_api:
-
-        call_api_raw = z_exemple.Basic.call_API(
-            task_id="call_api_raw",
-            http_conn_id="API_jsonplaceholder",
-            endpoint="/posts/1",
-            method="GET",
-            data=None,
-            headers={"Accept": "application/json"},
-            log_response=True,
+        task_xcom_put = z_exemple.Basic.xcom_put(
+            task_id="task_xcom_put",
+            var_test="toto_test",
         )
 
-        insert_warehouse = z_exemple.Basic.insert_warehouse(
-            task_id="insert_warehouse",
-            df=pd.DataFrame([
-                {"id": 1, "titre": "Premier titre", "contenu": "Premier contenu"},
-                {"id": 2, "titre": "Deuxième titre", "contenu": "Deuxième contenu"},
-                {"id": 3, "titre": "Troisième titre", "contenu": "Troisième contenu"},
-                {"id": 4, "titre": "dqdsqdsqdsq", "contenu": "dsqdq contenu"}
-            ]),  # DataFrame pandas
-            table_name="exemple_table",
+        task_spark = z_exemple.Basic.spark_df(
+            task_id="task_spark_df",
         )
 
-        chain(call_api_raw, insert_warehouse,)
+        chain(task_xcom_put, task_spark,)
+
+    task_xcom_get = z_exemple.Basic.xcom_get(
+        task_id="task_xcom_get",
+        xcom_source="groupe_load.task_xcom_put",
+    )
+    task_xcom_get_spark = z_exemple.Basic.xcom_get(
+        task_id="task_xcom_get_spark",
+        xcom_source="groupe_load.task_spark_df",
+    )
 
     chain(
-        [task_basic_hello, task_basic_xcom,task_spark,],
-        groupe_call_api,
+        [task_basic_hello, groupe_load],
+    )
+    chain(
+        groupe_load,
+        [task_xcom_get, task_xcom_get_spark],
     )

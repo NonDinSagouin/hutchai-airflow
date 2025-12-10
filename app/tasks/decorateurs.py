@@ -4,7 +4,14 @@ from airflow.sdk import task
 from app.helper.logging_title import logging_title
 
 def customTask(func):
-    """Décorateur pour logger le début et la fin d'une tâche."""
+    """Décorateur pour logger le début et la fin d'une tâche.
+
+    Args:
+        func (function): La fonction de la tâche à décorer.
+        
+    Returns:
+        function: La fonction décorée avec logging.
+    """
 
     @functools.wraps(func)
     def wrapper(**kwargs):

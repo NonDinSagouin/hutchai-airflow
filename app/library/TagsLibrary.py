@@ -1,19 +1,17 @@
 class TagsLibrary():
-    """
-    Cette classe contient des constantes de chaîne de caractères utilisées comme tags pour différentes opérations de traitement de données et interactions avec des bases de données spécifiques.
+    """ Cette classe contient des constantes de chaîne de caractères utilisées
+    comme tags pour différentes opérations de traitement de données et interactions
+    avec des bases de données spécifiques.
 
-    Attributs:
-        DATA_INSERTION (str): Tag pour l'insertion de données.
-        DATA_TRANSFORMATION (str): Tag pour la transformation de données.
-        DATA_EXPORT (str): Tag pour l'exportation de données.
-        DATA_IMPORT (str): Tag pour l'importation de données.
-        GCP (str): Tag pour les interactions avec Google Cloud Platform.
-        GCS (str): Tag pour les interactions avec Google Cloud Storage.
-        DB_A2PO (str): Tag pour les interactions avec la base de données A2PO.
-        DB_NOISETTE (str): Tag pour les interactions avec la base de données Noisette.
-        DB_USERS (str): Tag pour les interactions avec la base de données des utilisateurs.
+    Args:
+        DATA_EXTRACTION (str): Tag pour les opérations d'extraction de données.
+        DATA_INSERTION (str): Tag pour les opérations d'insertion de données.
+        DATA_TRANSFORMATION (str): Tag pour les opérations de transformation de données.
+        DATA_EXPORT (str): Tag pour les opérations d'exportation de données.
+        DATA_IMPORT (str): Tag pour les opérations d'importation de données.
+        API (str): Tag pour les opérations liées aux interactions avec des API.
 
-    exemple:
+    Examples:
         >>> print(TagsLibrary.DATA_INSERTION)
         data_insertion
     """
