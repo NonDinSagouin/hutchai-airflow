@@ -15,7 +15,7 @@ def logging_title(text: str, lvl: int = 1, close: bool = False) -> None:
 
     Returns:
         None
-        
+
     Examples:
         >>> logging_title(
         ...     "Démarrage du processus",
@@ -47,29 +47,25 @@ def logging_title(text: str, lvl: int = 1, close: bool = False) -> None:
 
     # Configuration des patterns selon le niveau
     patterns = {
-        1: {"char": "=", "length": 100},    # Titre principal
-        2: {"char": "-", "length": 80},     # Sous-titre
-        3: {"char": "*", "length": 10},     # Section
-        4: {"char": "+", "length": 10},     # Sous-section
-        5: {"char": ".", "length": 5}       # Paragraphe
+        1: {"char": "=", "length": max(50, len(text) + 10)},    # Titre principal
+        2: {"char": "-", "length": max(40, len(text) + 8)},     # Sous-titre
+        3: {"char": "*", "length": 10},                         # Section
+        4: {"char": "+", "length": 10},                         # Sous-section
+        5: {"char": ".", "length": 5}                           # Paragraphe
     }
 
     config = patterns[lvl]
-    paterne = config["char"] * config["length"]
+    pattern = config["char"] * config["length"]
 
     logger = logging.getLogger(__name__)
 
+    if lvl in [1, 2]:
+        logger.info(pattern)
+        logger.info(text)
+        logger.info(pattern)
+        return
+
     if close:
-        logger.info(text)
-        logger.info( "▲ " + (paterne * 3) + " ▲")
-        return
-
-    if lvl in [3, 4, 5]:
-        text = "▼ " + paterne + " " + text + " " + paterne + " ▼"
-        logger.info(text)
-        return
-
-    logger.info(paterne)
-    logger.info(text)
-    logger.info(paterne)
-
+        logger.info(f"▲ {pattern} {text} {pattern} ▲")
+    else:
+        logger.info(f"▼ {pattern} {text} {pattern} ▼")

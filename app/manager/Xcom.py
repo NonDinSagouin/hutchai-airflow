@@ -57,10 +57,10 @@ class Xcom:
 
             else:
                 raise AirflowFailException(f"❌ Format de fichier non supporté")
-        
+
         if isinstance(data, pd.DataFrame):
             helper.logging_title(f"✅ DataFrame récupéré depuis XCom avec {data.shape[0]} lignes et {data.shape[1]} colonnes.", lvl=3, close=True)
-            
+
         elif isinstance(data, dict):
             helper.logging_title(f"✅ Dict récupéré depuis XCom avec {len(data)} clés.", lvl=3, close=True)
 
@@ -126,7 +126,7 @@ class Xcom:
             else: output = Xcom.__file_strategy_parquet(input, tmp_folder, task_id, timestamp)
 
             logging.info(f"✅ Données sauvegardées dans: {output}")
-        
+
         elif xcom_strategy == 'direct':
             logging.info(f"✅ Données prêtes pour stockage direct dans XCom")
             output = input

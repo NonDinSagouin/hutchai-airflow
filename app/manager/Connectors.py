@@ -1,4 +1,6 @@
 import logging
+import hashlib
+
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.exceptions import AirflowFailException
 from airflow.sdk.bases.hook import BaseHook
@@ -10,6 +12,37 @@ from sqlalchemy.engine import Engine
 from app.helper import logging_title
 
 class Connectors:
+
+    # Cache pour les connexions
+    _connection_cache: dict = {}
+
+    @staticmethod
+    def clear_cache():
+        """Vide le cache des connexions"""
+        Connectors._connection_cache.clear()
+
+    @staticmethod
+    def __generate_cache_key(method_name: str, **kwargs) -> str:
+        """Génère une clé de cache unique basée sur le nom de la méthode et les paramètres
+
+        Args:
+            method_name (str): Nom de la méthode
+            **kwargs: Paramètres de la méthode
+
+        Returns:
+            str: Clé de cache unique
+
+        Example:
+            >>> Connectors.__generate_cache_key("http", conn_id="my_conn")
+            '5d41402abc4b2a76b9719d911017c592'
+        """
+        # Créer une chaîne unique avec tous les paramètres
+        params_str = f"{method_name}"
+        for key, value in sorted(kwargs.items()):
+            params_str += f"_{key}_{value}"
+
+        # Utiliser un hash pour avoir une clé de taille fixe
+        return hashlib.md5(params_str.encode()).hexdigest()
 
     @staticmethod
     def http(
@@ -24,7 +57,14 @@ class Connectors:
             dict: Détails de la connexion HTTP
         """
 
+        # Vérification du cache
+        cache_key = Connectors.__generate_cache_key("http", conn_id=conn_id)
+        if cache_key in Connectors._connection_cache: return Connectors._connection_cache[cache_key]
+
         logging_title("⏳ Configuration de la connexion HTTP", lvl=3)
+
+        if not conn_id:
+            raise ValueError("❌ Le paramètre 'conn_id' ne peut pas être vide.")
 
         try:
             conn = BaseHook.get_connection(conn_id)
@@ -47,8 +87,9 @@ class Connectors:
             logging.info(f"🔹schema: {http_details['schema']}")
             logging.info(f"🔹port: {http_details['port']}")
 
-            logging_title("", lvl=3, close=True)
+            logging_title("✅ Connexion", lvl=3, close=True)
 
+            Connectors._connection_cache[cache_key] = http_details
             return http_details
 
         except Exception as e:
@@ -67,6 +108,15 @@ class Connectors:
             Engine: Moteur SQLAlchemy pour la connexion PostgreSQL
         """
 
+        # Vérification du cache
+        cache_key = Connectors.__generate_cache_key("postgres", conn_id=conn_id)
+        if cache_key in Connectors._connection_cache: return Connectors._connection_cache[cache_key]
+
+        logging_title("⏳ Configuration de la connexion PostgreSQL", lvl=3)
+
+        if not conn_id:
+            raise ValueError("❌ Le paramètre 'conn_id' ne peut pas être vide.")
+
         hook = PostgresHook(postgres_conn_id=conn_id)
 
         try:
@@ -81,4 +131,13 @@ class Connectors:
             # Échec de connexion
             raise AirflowFailException(f"❌ Échec de connexion à {hook.postgres_conn_id} ! {e}")
 
+        conn = BaseHook.get_connection(conn_id)
+        logging.info(f"✅ Connexion PostgreSQL '{conn_id}' configurée avec succès.")
+        logging.info("📌 Détails de la connexion PostgreSQL: ")
+        logging.info(f"🔹host: {conn.host}")
+        logging.info(f"🔹schema: {conn.schema}")
+        logging.info(f"🔹port: {conn.port}")
+        logging_title("", lvl=3, close=True)
+
+        Connectors._connection_cache[cache_key] = engine
         return engine

@@ -1,20 +1,18 @@
 import sys
 import os
 import pandas as pd
-import logging
 import requests
 
 from datetime import datetime, timedelta
 
 from airflow import DAG
-from airflow.sdk import chain, TaskGroup
+from airflow.sdk import chain
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 import app.tasks.extraction as extraction
 import app.tasks.load as load
 import app.tasks.transformation as transformation
-import app.helper as helper
 import app.manager as manager
 
 from app.tasks.decorateurs import customTask
@@ -111,6 +109,8 @@ with DAG(
         {OBJECTIF}
     """,
 ) as dag:
+
+    Custom.get_ddragon_version()
 
     task_get_champions_list = extraction.ApiProviders.get(
         conn_id="API_LOL_ddragon",

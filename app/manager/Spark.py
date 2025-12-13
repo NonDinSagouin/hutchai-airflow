@@ -47,6 +47,16 @@ class Spark:
 
         Returns:
             SparkSession configurée
+
+        Examples:
+            >>> spark_session = Spark.get(
+            ...     conn_id="my_spark_conn",
+            ...     app_name="MySparkApp",
+            ...     driver_memory="2g",
+            ...     sql_shuffle_partitions="16"
+            ... )
+            ⏳ Configuration de la SparkSession
+            ✅ SparkSession obtenue.
         """
 
         helper.logging_title("⏳ Configuration de la SparkSession", lvl=3)
@@ -107,7 +117,6 @@ class Spark:
         finally:
             if app_name in Spark.__session:
                 del Spark.__session[app_name]  # Réinitialiser quand même
-            return
 
     @staticmethod
     def __set(
