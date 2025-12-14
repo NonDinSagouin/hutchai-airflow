@@ -20,6 +20,9 @@ from app.tasks.decorateurs import customTask
 DAG_ID = "LOL_referentiel"
 DESCRIPTION = "Ce DAG extrait, transforme et charge les données des champions League of Legends depuis l'API DDragon vers l'entrepôt de données."
 OBJECTIF = "Extraire, transformer et charger les données des champions League of Legends dans l'entrepôt de données."
+SCHEDULE = ""
+START_DATE = datetime(2025, 1, 1)
+TAGS = []
 
 default_args = {
     'owner': 'airflow',
@@ -45,7 +48,7 @@ class Custom():
             pd.DataFrame: DataFrame contenant la liste des champions avec les informations demandées.
         """
 
-        data_xcom = manager.Xcom.get(xcom_source=xcom_source, to_df=False, **context)
+        data_xcom = manager.Xcom.get(xcom_source=xcom_source, **context)
         champions_data = data_xcom["data"]
 
         # Créer une liste des champions avec les informations demandées
@@ -94,9 +97,9 @@ class Custom():
 with DAG(
     dag_id=DAG_ID, # Identifiant unique du DAG
     default_args=default_args, # Dictionnaire contenant les paramètres par défaut des tâches
-    start_date=datetime(2025, 1, 1), # Date de début du DAG
-    #schedule="00 1 * * 1-7",  # Fréquence d'exécution (CRON ou timedelta)
-    tags=["exemple",], # Liste de tags pour catégoriser le DAG dans l'UI
+    start_date=START_DATE, # Date de début du DAG
+    #schedule=SCHEDULE,  # Fréquence d'exécution (CRON ou timedelta)
+    tags=TAGS, # Liste de tags pour catégoriser le DAG dans l'UI
     catchup=False, # Exécution des tâches manquées (True ou False)
     max_active_runs=1,  # Limite à 1 exécutions actives en même temps
     dagrun_timeout=timedelta(minutes=15),
@@ -131,14 +134,9 @@ with DAG(
         xcom_source="task_list_champions",
     )
 
-    task_add_tech_photo = transformation.AddColumns.tech_photo(
-        task_id="task_add_tech_date",
-        xcom_source="task_add_tech_info",
-    )
-
     task_insert_champions_list = load.Warehouse.insert(
         task_id="task_insert_champions_list",
-        xcom_source="task_add_tech_date",
+        xcom_source="task_add_tech_info",
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
         table_name="ref_champions",
         schema="lol_referentiel",
@@ -149,6 +147,5 @@ with DAG(
         task_get_champions_list,
         task_list_champions,
         task_add_tech_info,
-        task_add_tech_photo,
         task_insert_champions_list,
     )

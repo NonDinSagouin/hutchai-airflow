@@ -37,9 +37,16 @@ class Xcom:
                 col1  col2
         """
 
+        if not xcom_source:
+            raise AirflowFailException("❌ Le paramètre 'xcom_source' est obligatoire pour récupérer les données depuis XCom.")
+        if 'ti' not in context:
+            raise AirflowFailException("TaskInstance manquante dans le contexte")
+
         helper.logging_title("Récupération des données depuis XCom", lvl=3)
 
-        ti = context['ti']
+        ti = context.get('ti')
+        if not ti:
+            raise AirflowFailException("❌ TaskInstance introuvable dans le contexte")
         data = ti.xcom_pull(task_ids=xcom_source)
 
         # Si c'est un chemin de fichier, le charger
@@ -48,11 +55,19 @@ class Xcom:
 
             # Déterminer le format selon l'extension
             if data.endswith('.parquet'):
-                data = pd.read_parquet(data)
+                try:
+                    data = pd.read_parquet(data)
+                except Exception as e:
+                    raise AirflowFailException(f"❌ Erreur lecture parquet: {str(e)}")
+                
                 logging.info(f"✅ Fichier parquet chargé avec succès")
 
             elif data.endswith('.json'):
-                with open(data, 'r') as f: data = json.load(f)
+                try:
+                    with open(data, 'r') as f: data = json.load(f)
+                except Exception as e:
+                    raise AirflowFailException(f"❌ Erreur lecture JSON: {str(e)}")
+                
                 logging.info(f"✅ Fichier JSON chargé avec succès")
 
             else:
@@ -74,7 +89,7 @@ class Xcom:
         input: str | pd.DataFrame | dict,
         xcom_strategy: str = 'auto',
         file_format: str = 'parquet',
-        **kwargs
+        **context
     ) -> str | pd.DataFrame | dict:
         """ Prépare les données pour le stockage dans XCom selon la stratégie choisie.
 
@@ -82,7 +97,7 @@ class Xcom:
             input (str | pd.DataFrame | dict): Données à stocker dans XCom
             xcom_strategy (str, optionnel): Stratégie de stockage ('direct', 'file', 'auto'). Par défaut à 'auto'.
             file_format (str, optionnel): Format de fichier si stratégie 'file' ('json' ou 'parquet'). Par défaut à 'parquet'.
-            **kwargs: Contexte Airflow contenant TaskInstance
+            **context: Contexte Airflow contenant TaskInstance
 
         Returns:
             str | pd.DataFrame | dict: Données à stocker dans XCom (chemin de fichier ou données directes)
@@ -99,7 +114,22 @@ class Xcom:
             /tmp/airflow_data/task_123_20240601_153045_123456.parquet
         """
 
+        if xcom_strategy not in ['direct', 'file', 'auto']:
+            raise AirflowFailException("❌ Le paramètre 'xcom_strategy' doit être 'direct', 'file' ou 'auto'.")
+        
+        if file_format not in ['json', 'parquet']:
+            raise AirflowFailException("❌ Le paramètre 'file_format' doit être 'json' ou 'parquet'.")
+
+        if 'ti' not in context:
+            raise AirflowFailException("TaskInstance manquante dans le contexte")
+
+        ti = context.get('ti')
+        if not ti:
+            raise AirflowFailException("❌ TaskInstance introuvable dans le contexte")
+
         helper.logging_title("Préparation des données pour XCom", lvl=3)
+        tmp_folder = Variable.get("Folder_tmp_data", default="/tmp/airflow_data")
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
         output = None
 
         # Stratégie adaptative selon la taille
@@ -117,10 +147,8 @@ class Xcom:
 
         if xcom_strategy == 'file':
 
-            task_id = kwargs['ti'].task_id
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
-            tmp_folder = Variable.get("Folder_tmp_data", default="/tmp/airflow_data")
-
+            task_id = ti.task_id
+            
             # Déterminer l'extension selon le format et le type de données
             if file_format == 'json': output = Xcom.__file_strategy_json(input, tmp_folder, task_id, timestamp)
             else: output = Xcom.__file_strategy_parquet(input, tmp_folder, task_id, timestamp)
@@ -131,6 +159,7 @@ class Xcom:
             logging.info(f"✅ Données prêtes pour stockage direct dans XCom")
             output = input
 
+        Xcom.clean_tmp_files(tmp_folder=tmp_folder, older_than_minutes=60)
         helper.logging_title(f"✅ Données préparées pour XCom.", lvl=3, close=True)
         return output
 
@@ -196,3 +225,33 @@ class Xcom:
 
         logging.info(f"💾 Fichier Parquet sauvegardé avec succès")
         return filepath
+    
+    @staticmethod
+    def clean_tmp_files(
+        tmp_folder: str,
+        older_than_minutes: int = 60
+    ):
+        """ Nettoie les fichiers temporaires plus anciens qu'un certain temps.
+
+        Args:
+            tmp_folder (str): Dossier temporaire à nettoyer
+            older_than_minutes (int, optionnel): Supprimer les fichiers plus anciens que ce nombre de minutes. Par défaut à 60.
+        """
+
+        now = datetime.now()
+        cutoff = now.timestamp() - (older_than_minutes * 60)
+        deleted_count = 0
+
+        for filename in os.listdir(tmp_folder):
+            filepath = os.path.join(tmp_folder, filename)
+            if os.path.isfile(filepath):
+                file_mtime = os.path.getmtime(filepath)
+                if file_mtime < cutoff:
+                    os.remove(filepath)
+                    logging.info(f"🗑️ Fichier supprimé: {filepath}")
+                    deleted_count += 1
+
+        if deleted_count > 0:
+            logging.info(f"✅ Nettoyage terminé: {deleted_count} fichier(s) supprimé(s).")
+        else:
+            logging.info("✅ Nettoyage terminé: aucun fichier à supprimer.")

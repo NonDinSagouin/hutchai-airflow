@@ -3,6 +3,7 @@ import requests
 import pandas as pd
 
 import app.manager as manager
+import app.helper as helper
 from app.tasks.decorateurs import customTask
 
 class ApiProviders():
@@ -37,8 +38,8 @@ class ApiProviders():
             ...     xcom_strategy="auto",
             ...     file_format="parquet"
             ... )
-            Appel API vers: https://api.example.com/data
-            Données récupérées avec succès: 150 éléments.
+            ⏳ Appel API vers: https://api.example.com/data
+            ✅ Données récupérées avec succès: 150 éléments.
         """
 
         if conn_id is None:
@@ -52,24 +53,18 @@ class ApiProviders():
         url = f"{http_details['host']}{endpoint}"
         logging.info(f"⏳ Appel API vers: {url}")
 
-        try:
-            response = requests.get(url, headers=http_details.get('headers'))
-            response.raise_for_status()
+        data = helper.call_api(
+            url=url,
+            headers=http_details.get('headers', {})
+        )
 
-            data = response.json()
-            logging.info(f"✅ Données récupérées avec succès: {len(data.get('data', {}))} éléments.")
-
-            if to_dataframe:
-                data = pd.json_normalize(data)
-                logging.info(f"✅ Données converties en DataFrame pandas avec succès. Dimensions: {data.shape}.")
-
-            return manager.Xcom.put(
-                input=data,
-                xcom_strategy=xcom_strategy,
-                file_format=file_format,
-                **kwargs
-            )
-
-        except requests.exceptions.RequestException as e:
-            logging.error(f"❌ Erreur lors de l'appel API: {e}")
-            raise
+        if to_dataframe:
+            data = pd.json_normalize(data)
+            logging.info(f"✅ Données converties en DataFrame pandas avec succès. Dimensions: {data.shape}.")
+        
+        return manager.Xcom.put(
+            input=data,
+            xcom_strategy=xcom_strategy,
+            file_format=file_format,
+            **kwargs
+        )

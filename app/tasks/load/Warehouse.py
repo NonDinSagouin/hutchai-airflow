@@ -1,5 +1,6 @@
 import pandas as pd
 import logging
+import re
 
 from sqlalchemy.engine import Engine
 from sqlalchemy import text
@@ -16,25 +17,50 @@ class Warehouse():
     def __setup_schema(engine: Engine, schema: str):
         """ Crée un schéma dans la base de données s'il n'existe pas déjà."""
 
+        if not schema or not schema.strip():
+            raise ValueError("Le nom du schéma ne peut pas être vide")
+
+        if not re.match(r'^[a-zA-Z0-9_]+$', schema):
+            raise ValueError(f"Nom de schéma invalide: '{schema}'")
+
         logging.info(f"⏳ Vérification/création du schéma '{schema}'")
 
-        with engine.connect() as connection:
-            connection.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema}"))
-            logging.info(f"✅ Schéma '{schema}' vérifié/créé avec succès.")
+        try:
+            with engine.begin() as connection:
+                connection.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{schema}"'))
+                logging.info(f"✅ Schéma '{schema}' vérifié/créé avec succès.")
+
+        except Exception as e:
+            logging.error(f"❌ Erreur lors de la création du schéma '{schema}': {e}")
+            raise AirflowFailException(f"Impossible de créer le schéma '{schema}': {e}")
 
     @staticmethod
     def __setup_table(engine: Engine, table_name: str, schema: str):
         """ Crée une table dans la base de données s'il n'existe pas déjà."""
 
+        if not table_name or not table_name.strip():
+            raise ValueError("Le nom de la table ne peut pas être vide")
+        
+        if not re.match(r'^[a-zA-Z0-9_]+$', table_name):
+            raise ValueError(f"Nom de table invalide: '{table_name}'")
+        
+        if not re.match(r'^[a-zA-Z0-9_]+$', schema):
+            raise ValueError(f"Nom de schéma invalide: '{schema}'")
+
         logging.info(f"⏳ Vérification/création de la table '{schema}.{table_name}'")
 
-        with engine.connect() as connection:
-            connection.execute(text(f"""
-                CREATE TABLE IF NOT EXISTS {schema}.{table_name} (
-                    id SERIAL PRIMARY KEY
-                )
-            """))
-            logging.info(f"✅ Table '{schema}.{table_name}' vérifiée/créée avec succès.")
+        try:
+            with engine.connect() as connection:
+                connection.execute(text(f"""
+                    CREATE TABLE IF NOT EXISTS {schema}.{table_name} (
+                        id SERIAL PRIMARY KEY
+                    )
+                """))
+                logging.info(f"✅ Table '{schema}.{table_name}' vérifiée/créée avec succès.")
+
+        except Exception as e:
+            logging.error(f"❌ Erreur lors de la vérification de la table '{schema}.{table_name}': {e}")
+            raise AirflowFailException(f"Impossible de vérifier la table: {e}") from e
 
     @customTask
     @staticmethod
@@ -75,14 +101,13 @@ class Warehouse():
             Insère les données extraites par la tâche "extract_task" dans la table "public.sales_data" du Data Warehouse.
         """
 
-        df = manager.Xcom.get(xcom_source=xcom_source, to_df=True, **kwargs)
+        df = manager.Xcom.get(xcom_source=xcom_source, **kwargs)
 
         if df.empty:
             logging.warning("❌ Aucune donnée à traiter pour le snapshot")
             return
 
         Warehouse.__setup_schema(engine, schema)
-        Warehouse.__setup_table(engine, table_name, schema)
 
         logging.info(f"⏳ Insertion de {len(df)} ligne(s) dans la table '{schema}.{table_name}'")
 
@@ -137,7 +162,7 @@ class Warehouse():
             en supprimant les données existantes pour les périodes (année/semaine) concernées avant d'insérer les nouvelles.
         """
 
-        df = manager.Xcom.get(xcom_source=xcom_source, to_df=True, **kwargs)
+        df = manager.Xcom.get(xcom_source=xcom_source, **kwargs)
 
         if df.empty:
             logging.warning("Aucune donnée à traiter pour le snapshot")

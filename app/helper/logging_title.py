@@ -64,6 +64,10 @@ def logging_title(text: str, lvl: int = 1, close: bool = False) -> None:
         logger.info(text)
         logger.info(pattern)
         return
+    
+    if lvl in [5]:
+        logger.info(f"{pattern} {text} {pattern}")
+        return
 
     if close:
         logger.info(f"▲ {pattern} {text} {pattern} ▲")
