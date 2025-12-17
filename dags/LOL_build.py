@@ -84,6 +84,7 @@ with DAG(
         columns={
             "match_id": "VARCHAR(50) PRIMARY KEY",
             "is_processed": "BOOLEAN DEFAULT FALSE",
+            "in_progress": "BOOLEAN DEFAULT FALSE",
             "game_mode": "VARCHAR(50) DEFAULT NULL",
             "game_version": "VARCHAR(20) DEFAULT NULL",
             "tech_date_creation": TYPE_TIMESTAMP,
@@ -99,7 +100,7 @@ with DAG(
             "puuid": "VARCHAR(250) PRIMARY KEY",
             "game_name": "VARCHAR(100)",
             "tag_line": "VARCHAR(10)",
-            "date_processed": TYPE_TIMESTAMP,
+            "date_processed": "TIMESTAMP DEFAULT NULL",
             "tech_date_creation": TYPE_TIMESTAMP,
             "tech_date_modification": TYPE_TIMESTAMP,
         },
@@ -131,7 +132,8 @@ with DAG(
     )
 
     chain(
-        [task_create_fact_match_ids, task_create_fact_puuid],
+        task_create_fact_match_ids,
+        task_create_fact_puuid,
         task_get_match_ids,
         task_rename_columns_df,
         task_insert_fact_puuid,

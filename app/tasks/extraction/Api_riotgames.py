@@ -2,6 +2,8 @@ import logging
 import requests
 import pandas as pd
 
+
+from typing import Any
 from datetime import datetime, timedelta
 from airflow.sdk import Variable
 from airflow.exceptions import AirflowFailException
@@ -67,46 +69,12 @@ class Api_riotgames():
             headers=Api_riotgames.HTTP_HEADERS,
         )
 
-    @staticmethod
-    def __get_summoner_by_name(
-        gameName: str,
-        tagLine: str,
-    ) -> dict:
-        """ Permet de récupérer les informations d'un invocateur via l'API Riot Games.
-
-        Args:
-            gameName (str): Le nom de l'invocateur.
-            tagLine (str): Le tag de l'invocateur.
-
-        Returns:
-            dict: Un dictionnaire contenant les informations de l'invocateur.
-        """
-
-        endpoint = f"/riot/account/v1/accounts/by-riot-id/{gameName}/{tagLine}"
-        url = f"{Api_riotgames.HTTP_HOST}{endpoint}"
-
-        return helper.call_api(
-            url=url,
-            headers=Api_riotgames.HTTP_HEADERS,
-        )
-
-    @customTask
-    @staticmethod
-    def fetch_puuid(
-        **context
-    ):
-        return pd.DataFrame({
-            'puuid': ['EBhoroG1Nb0amQGKSVGPY9noefJ0ximdrKGjrvf3WTZfYJmSP7Rv9MKXMcgJh-rruGbNYJvUsdBpYA'],
-            'summonerName': ['JeanPomme'],
-            'tagLine': ['POMM']
-        })
-
     @customTask
     @staticmethod
     def fetch_matchs_by_puuid(
         xcom_source: str,
         **context
-    ) -> None:
+    ) -> Any:
         """ Permet de récupérer les identifiants des matchs d'un joueur via l'API Riot Games.
 
         Args:
@@ -114,7 +82,7 @@ class Api_riotgames():
             **context: Contexte d'exécution Airflow.
 
         Returns:
-            None
+            Any: DataFrame contenant les identifiants des matchs récupérés.
         """
 
         lol_puuid = manager.Xcom.get(
@@ -137,7 +105,7 @@ class Api_riotgames():
         while True:
 
             if nb_iterations > 20:
-                raise AirflowException("❌ Nombre maximum d'itérations atteint lors de la récupération des matchs.")
+                raise AirflowFailException("❌ Nombre maximum d'itérations atteint lors de la récupération des matchs.")
 
             matches = Api_riotgames.__get_matches(lol_puuid, start, count)
             nb_iterations += 1

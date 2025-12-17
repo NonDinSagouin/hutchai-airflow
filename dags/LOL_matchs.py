@@ -58,7 +58,7 @@ with DAG(
         schema="lol_datas",
         task_id="task_get_puuid",
         shema_select={"puuid", "game_name", "tag_line"},
-        shema_order="date_processed DESC",
+        shema_order="date_processed ASC",
         limit=1,
     )
 
@@ -95,10 +95,24 @@ with DAG(
         },
     )
 
+    task_update_puuid_status = load.Warehouse.update(
+        task_id="task_update_puuid_status",
+        engine=manager.Connectors.postgres("POSTGRES_warehouse"),
+        table_name="lol_fact_puuid",
+        schema="lol_datas",
+        set_values={
+            "date_processed": "CURRENT_TIMESTAMP",
+        },
+        where_conditions={
+            "puuid": "{{ ti.xcom_pull(task_ids='task_get_puuid')['puuid'].iloc[0] }}",
+        },
+    )
+
     chain(
         task_get_puuid,
         task_fetch_matchs_by_puuid,
         task_add_tech_info,
         task_insert_raw_matchs,
-        task_raw_to_fact_matchs
+        task_raw_to_fact_matchs,
+        task_update_puuid_status,
     )

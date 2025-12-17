@@ -2,6 +2,7 @@ import pandas as pd
 import logging
 import re
 
+from typing import Any
 from sqlalchemy.engine import Engine
 from sqlalchemy import text
 from airflow.exceptions import AirflowFailException
@@ -78,7 +79,7 @@ class Warehouse():
         shema_order: str = None,
         limit: int = None,
         **kwargs
-    ):
+    ) -> Any:
         """ Extrait des données d'un entrepôt de données (Data Warehouse).
 
         Args:
@@ -91,7 +92,7 @@ class Warehouse():
             limit (int, optional): Limite le nombre de lignes extraites. Par défaut None (aucune limite).
 
         Returns:
-            pd.DataFrame: DataFrame contenant les données extraites.
+            Any: Données extraites sous forme de DataFrame ou autre format selon l'implémentation.
 
         Examples:
             >>> Warehouse.extract(
@@ -158,7 +159,7 @@ class Warehouse():
             if_table_exists (str, optional): Comportement si la table existe déjà ("fail", "replace", "append"). Par défaut "append".
 
         Returns:
-            None
+            dict: Dictionnaire contenant le nom de la table, le schéma et le nombre de lignes insérées.
 
         Examples:
             >>> Warehouse.insert(
@@ -200,13 +201,106 @@ class Warehouse():
 
     @customTask
     @staticmethod
+    def update(
+        engine: Engine,
+        table_name: str = "test_table",
+        schema: str = "public",
+        set_values: dict = None,
+        where_conditions: dict = None,
+        **kwargs
+    ) -> dict:
+        """ Met à jour des données dans un entrepôt de données (Data Warehouse).
+
+        Args:
+            engine (Engine): Moteur SQLAlchemy pour la connexion à la base de données.
+            table_name (str, optional): Nom de la table à mettre à jour. Par défaut "test_table".
+            schema (str, optional): Schéma de la base de données. Par défaut "public".
+            set_values (dict): Dictionnaire des colonnes et valeurs à mettre à jour.
+            where_conditions (dict): Dictionnaire des conditions WHERE pour filtrer les lignes à mettre à jour.
+
+        Returns:
+            dict: Dictionnaire contenant le nom de la table, le schéma et le nombre de lignes mises à jour.
+
+        Examples:
+            >>> Warehouse.update(
+            ...     engine=engine,
+            ...     table_name="sales_data",
+            ...     schema="public",
+            ...     set_values={"amount": 200.0},
+            ...     where_conditions={"id": 1}
+            ... )
+            Met à jour la colonne "amount" à 200.0 dans la table "publica.sales_data" pour l'enregistrement où l'id est 1.
+        """
+
+        if not set_values:
+            raise ValueError("Aucune valeur spécifiée pour la mise à jour.")
+
+        if not where_conditions:
+            raise ValueError("Aucune condition WHERE spécifiée pour la mise à jour.")
+        
+        print(where_conditions["puuid"])
+
+        # Fonctions SQL natives qui ne doivent pas être paramétrées
+        SQL_FUNCTIONS = ['CURRENT_TIMESTAMP', 'CURRENT_DATE', 'CURRENT_TIME', 'NOW()', 'NULL']
+        
+        # Construction de la clause SET en distinguant les fonctions SQL des valeurs
+        set_parts = []
+        parameters = {}
+        
+        for col, val in set_values.items():
+            if isinstance(val, str) and val.upper() in SQL_FUNCTIONS:
+                # Fonction SQL native - insérer directement
+                set_parts.append(f"{col} = {val}")
+            else:
+                # Valeur paramétrable
+                set_parts.append(f"{col} = :set_{col}")
+                parameters[f"set_{col}"] = val
+        
+        set_clause = ', '.join(set_parts)
+        
+        # Construction de la clause WHERE
+        where_parts = []
+        for col, val in where_conditions.items():
+            # Extraire la valeur si c'est une Series pandas
+            if hasattr(val, 'iloc'):
+                val = val.iloc[0] if len(val) > 0 else val
+            where_parts.append(f"{col} = :where_{col}")
+            parameters[f"where_{col}"] = val
+        
+        where_clause = ' AND '.join(where_parts)
+
+        update_query = f"""
+            UPDATE {schema}.{table_name}
+            SET {set_clause}
+            WHERE {where_clause}
+        """
+
+        logging.info(f"⏳ Exécution de la requête de mise à jour: {update_query}")
+
+        try:
+            with engine.begin() as connection:
+                result = connection.execute(text(update_query), **parameters)
+                logging.info(f"✅ Mise à jour terminée avec succès dans la table '{schema}.{table_name}'. Lignes affectées: {result.rowcount}")
+
+        except Exception as e:
+            logging.error(f"❌ Erreur lors de la mise à jour dans le Data Warehouse: {e}")
+            raise
+
+        return {
+            'table_name': table_name,
+            'schema': schema,
+            'rows_updated': result.rowcount,
+        }
+
+    @customTask
+    @staticmethod
     def insert_lines(
         engine: Engine,
         table_name: str = "test_table",
         schema: str = "public",
         lines: list = None,
         **kwargs
-    ) -> None:
+    ) -> dict:
         """ Insère des lignes spécifiques dans une table d'un entrepôt de données (Data Warehouse).
 
         Args:
@@ -216,7 +310,7 @@ class Warehouse():
             lines (list, optional): Liste des dictionnaires représentant les lignes à insérer.
 
         Returns:
-            None
+            dict: Dictionnaire contenant le nom de la table, le schéma et le nombre de lignes insérées.
 
         Examples:
             >>> Warehouse.insert_lines(
@@ -240,6 +334,7 @@ class Warehouse():
 
         try:
             with engine.begin() as connection:
+
                 for row in lines:
                     columns = ', '.join(row.keys())
                     values = ', '.join([f":{key}" for key in row.keys()])
@@ -251,6 +346,12 @@ class Warehouse():
         except Exception as e:
             logging.error(f"❌ Erreur lors de l'insertion des lignes dans le Data Warehouse: {e}")
             raise
+
+        return {
+            'table_name': table_name,
+            'schema': schema,
+            'rows_inserted': len(lines),
+        }
 
     @customTask
     @staticmethod
