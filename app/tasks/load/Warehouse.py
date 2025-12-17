@@ -1,6 +1,7 @@
 import pandas as pd
 import logging
 import re
+import pendulum
 
 from typing import Any
 from sqlalchemy.engine import Engine
@@ -67,6 +68,27 @@ class Warehouse():
         except Exception as e:
             logging.error(f"❌ Erreur lors de la vérification de la table '{schema}.{table_name}': {e}")
             raise AirflowFailException(f"Impossible de vérifier la table: {e}") from e
+
+    @staticmethod
+    def __get_execution_date(**kwargs) -> pendulum.DateTime:
+        """Méthode privée pour récupérer le DataFrame et la date d'exécution.
+
+        Returns:
+            pendulum.DateTime: Date d'exécution
+        """
+        PARIS_TZ = "Europe/Paris"
+
+        if 'logical_date' in kwargs:
+            execution_date = kwargs['logical_date'].in_timezone(PARIS_TZ)
+        elif 'execution_date' in kwargs:
+            execution_date = kwargs['execution_date'].in_timezone(PARIS_TZ)
+        elif 'ds' in kwargs:
+            execution_date = pendulum.parse(kwargs['ds']).in_timezone(PARIS_TZ)
+        else:
+            raise KeyError("❌ Aucune date d'exécution trouvée dans le contexte (logical_date, execution_date, ds)")
+        
+        logging.debug(f"📅 Date d'exécution récupérée : {execution_date}")
+        return execution_date
 
     @customTask
     @staticmethod
@@ -137,6 +159,47 @@ class Warehouse():
 
     @customTask
     @staticmethod
+    def extract_from_dict(
+        xcom_source: str,
+        key: str,
+        **kwargs
+    ) -> Any:
+        """ Extrait un élément spécifique d'un dictionnaire stocké dans XCom.
+
+        Args:
+            xcom_source (str): Identifiant de la tâche Airflow dont le dictionnaire sera extrait via XCom.
+            key (str): Clé de l'élément à extraire du dictionnaire.
+            **kwargs: Contexte d'exécution Airflow.
+
+        Returns:
+            Any: L'élément extrait du dictionnaire (généralement un DataFrame).
+
+        Examples:
+            >>> Warehouse.extract_from_dict(
+            ...     xcom_source="fetch_task",
+            ...     key="match_data"
+            ... )
+            Extrait l'élément "match_data" du dictionnaire retourné par "fetch_task".
+        """
+
+        data = manager.Xcom.get(xcom_source=xcom_source, **kwargs)
+
+        if not isinstance(data, dict):
+            raise AirflowFailException(f"Les données récupérées ne sont pas un dictionnaire. Type reçu: {type(data)}")
+
+        if key not in data:
+            raise AirflowFailException(f"La clé '{key}' n'existe pas dans le dictionnaire. Clés disponibles: {list(data.keys())}")
+
+        extracted_data = data[key]
+        logging.info(f"✅ Élément '{key}' extrait avec succès du dictionnaire")
+
+        return manager.Xcom.put(
+            input=extracted_data,
+            **kwargs
+        )
+
+    @customTask
+    @staticmethod
     def insert(
         xcom_source : str,
         engine : Engine,
@@ -145,6 +208,7 @@ class Warehouse():
         chunksize: int = 1000,
         method : str = None,
         if_table_exists: str = "append",
+        add_technical_columns: bool = False,
         **kwargs
     ) -> dict:
         """ Insère des données dans un entrepôt de données (Data Warehouse).
@@ -176,8 +240,19 @@ class Warehouse():
 
         df = manager.Xcom.get(xcom_source=xcom_source, **kwargs)
 
+        if df is None:
+            raise AirflowFailException(f"❌ La source XCom '{xcom_source}' n'existe pas ou ne retourne aucune donnée.")
+
+        if not isinstance(df, pd.DataFrame):
+            raise AirflowFailException(f"❌ Les données récupérées depuis '{xcom_source}' ne sont pas un DataFrame. Type reçu: {type(df)}")
+
         if df.empty:
-            raise AirflowFailException("Aucune donnée à insérer dans le Data Warehouse.")
+            raise AirflowFailException("❌ Aucune donnée à insérer dans le Data Warehouse (DataFrame vide).")
+        
+        if add_technical_columns:
+            execution_date = Warehouse.__get_execution_date(**kwargs)
+            df["tech_dag_id"] = kwargs['dag'].dag_id
+            df["tech_execution_date"] = execution_date.strftime("%Y-%m-%d %H:%M:%S")
 
         Warehouse.__setup_schema(engine, schema)
 

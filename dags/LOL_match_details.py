@@ -6,7 +6,7 @@ import requests
 from datetime import datetime, timedelta
 
 from airflow import DAG
-from airflow.sdk import chain
+from airflow.sdk import chain, TaskGroup, Asset
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
@@ -64,17 +64,93 @@ with DAG(
 
     task_get_matchs = load.Warehouse.extract(
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
-        table_name="lol_fact_match_ids",
+        table_name="lol_fact_match_datas",
         schema="lol_datas",
         task_id="task_get_matchs",
         shema_select={"match_id",},
         shema_where={
             "is_processed": "false",
-            "in_progress": "false",
+            "game_in_progress": "false",
         },
-        limit=100,
+        limit=2, # 100
     )
 
+    task_fetch_match_details = extraction.Api_riotgames.fetch_match_details(
+        task_id = "task_fetch_match_details",
+        xcom_source="task_get_matchs",
+    )
+
+    with TaskGroup("groupe_puuid") as groupe_puuid:
+
+        task_extract_puuid_participants = load.Warehouse.extract_from_dict(
+            task_id="task_extract_puuid_participants",
+            xcom_source="task_fetch_match_details",
+            key = "puuid_participants",
+        )
+        task_insert_lol_raw_puuid = load.Warehouse.insert(
+            task_id="task_insert_lol_raw_puuid",
+            xcom_source="groupe_puuid.task_extract_puuid_participants",
+            engine=manager.Connectors.postgres("POSTGRES_warehouse"),
+            table_name="lol_raw_puuid",
+            schema="lol_datas",
+            if_table_exists="replace",
+            add_technical_columns=True,
+        )
+
+        task_raw_to_fact_matchs = load.Warehouse.raw_to_fact(
+            task_id="task_raw_to_fact",
+            outlets=[Asset('warehouse://lol_datas/lol_fact_puuid')],
+            source_table="lol_datas.lol_raw_puuid",
+            target_table="lol_datas.lol_fact_puuid",
+            engine=manager.Connectors.postgres("POSTGRES_warehouse"),
+            has_not_matched=True,
+            has_matched=False,
+            join_keys=["puuid"],
+            non_match_columns={
+                "puuid": "puuid",
+            },
+        )
+
+        chain(task_extract_puuid_participants, task_insert_lol_raw_puuid, task_raw_to_fact_matchs)
+
+    with TaskGroup("groupe_match_datas") as groupe_match_datas:
+
+        task_extract_match_data = load.Warehouse.extract_from_dict(
+            task_id="task_extract_match_data",
+            xcom_source="task_fetch_match_details",
+            key = "match_data",
+        )
+        task_insert_lol_raw_match_data = load.Warehouse.insert(
+            task_id="task_insert_lol_raw_match_data",
+            xcom_source="groupe_match_datas.task_extract_match_data",
+            engine=manager.Connectors.postgres("POSTGRES_warehouse"),
+            table_name="lol_raw_match_datas",
+            schema="lol_datas",
+            if_table_exists="replace",
+            add_technical_columns=True,
+        )
+        chain(task_extract_match_data, task_insert_lol_raw_match_data)
+
+    with TaskGroup("groupe_stats_participants") as groupe_stats_participants:
+
+        task_extract_stats_participants = load.Warehouse.extract_from_dict(
+            task_id="task_extract_stats_participants",
+            xcom_source="task_fetch_match_details",
+            key = "stats_participants",
+        )
+        task_insert_lol_raw_stats_participants = load.Warehouse.insert(
+            task_id="task_insert_lol_raw_stats_participants",
+            xcom_source="groupe_stats_participants.task_extract_stats_participants",
+            engine=manager.Connectors.postgres("POSTGRES_warehouse"),
+            table_name="lol_raw_stats_participants",
+            schema="lol_datas",
+            if_table_exists="replace",
+            add_technical_columns=True,
+        )
+        chain(task_extract_stats_participants, task_insert_lol_raw_stats_participants)
+
     chain(
-        task_get_matchs
+        task_get_matchs,
+        task_fetch_match_details,
+        [groupe_puuid, groupe_match_datas, groupe_stats_participants],
     )

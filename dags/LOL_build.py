@@ -76,17 +76,20 @@ with DAG(
 
     TYPE_TIMESTAMP = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
 
-    task_create_fact_match_ids = load.Warehouse.create_table(
-        task_id="task_create_fact_match_ids",
+    task_create_fact_match_datas = load.Warehouse.create_table(
+        task_id="task_create_fact_match_datas",
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
         schema="lol_datas",
-        table_name="lol_fact_match_ids",
+        table_name="lol_fact_match_datas",
         columns={
             "match_id": "VARCHAR(50) PRIMARY KEY",
-            "is_processed": "BOOLEAN DEFAULT FALSE",
-            "in_progress": "BOOLEAN DEFAULT FALSE",
+            "game_creation": "BIGINT DEFAULT NULL",
+            "game_duration": "BIGINT DEFAULT NULL",
             "game_mode": "VARCHAR(50) DEFAULT NULL",
+            "game_type": "VARCHAR(50) DEFAULT NULL",
             "game_version": "VARCHAR(20) DEFAULT NULL",
+            "game_in_progress": "BOOLEAN DEFAULT FALSE",
+            "is_processed": "BOOLEAN DEFAULT FALSE",
             "tech_date_creation": TYPE_TIMESTAMP,
             "tech_date_modification": TYPE_TIMESTAMP,
         },
@@ -98,8 +101,8 @@ with DAG(
         table_name="lol_fact_puuid",
         columns={
             "puuid": "VARCHAR(250) PRIMARY KEY",
-            "game_name": "VARCHAR(100)",
-            "tag_line": "VARCHAR(10)",
+            "game_name": "VARCHAR(100) DEFAULT NULL",
+            "tag_line": "VARCHAR(10) DEFAULT NULL",
             "date_processed": "TIMESTAMP DEFAULT NULL",
             "tech_date_creation": TYPE_TIMESTAMP,
             "tech_date_modification": TYPE_TIMESTAMP,
@@ -132,7 +135,7 @@ with DAG(
     )
 
     chain(
-        task_create_fact_match_ids,
+        task_create_fact_match_datas,
         task_create_fact_puuid,
         task_get_match_ids,
         task_rename_columns_df,

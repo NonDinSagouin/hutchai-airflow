@@ -73,6 +73,9 @@ class Xcom:
             else:
                 raise AirflowFailException(f"❌ Format de fichier non supporté")
 
+        if data is None:
+            raise AirflowFailException(f"❌ Aucune donnée trouvée dans XCom pour la tâche '{xcom_source}'.")
+
         if isinstance(data, pd.DataFrame):
             helper.logging_title(f"✅ DataFrame récupéré depuis XCom avec {data.shape[0]} lignes et {data.shape[1]} colonnes.", lvl=3, close=True)
 

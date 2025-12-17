@@ -58,7 +58,7 @@ with DAG(
         schema="lol_datas",
         task_id="task_get_puuid",
         shema_select={"puuid", "game_name", "tag_line"},
-        shema_order="date_processed ASC",
+        shema_order="date_processed DESC",
         limit=1,
     )
 
@@ -67,25 +67,21 @@ with DAG(
         xcom_source="task_get_puuid",
     )
 
-    task_add_tech_info = transformation.AddColumns.tech_info(
-        task_id="task_add_tech_info",
-        xcom_source="task_fetch_matchs_by_puuid",
-    )
-
     task_insert_raw_matchs = load.Warehouse.insert(
         task_id="task_insert_raw_matchs",
-        xcom_source="task_add_tech_info",
+        xcom_source="task_fetch_matchs_by_puuid",
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
-        table_name="lol_row_match_ids",
+        table_name="lol_raw_match_datas_ids",
         schema="lol_datas",
         if_table_exists="replace",
+        add_technical_columns=True,
     )
 
     task_raw_to_fact_matchs = load.Warehouse.raw_to_fact(
         task_id="task_raw_to_fact",
-        outlets=[Asset('warehouse://lol_datas/lol_fact_match_ids')],
-        source_table="lol_datas.lol_row_match_ids",
-        target_table="lol_datas.lol_fact_match_ids",
+        outlets=[Asset('warehouse://lol_datas/lol_fact_match_datas')],
+        source_table="lol_datas.lol_raw_match_datas_ids",
+        target_table="lol_datas.lol_fact_match_datas",
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
         has_not_matched=True,
         has_matched=False,
@@ -111,7 +107,6 @@ with DAG(
     chain(
         task_get_puuid,
         task_fetch_matchs_by_puuid,
-        task_add_tech_info,
         task_insert_raw_matchs,
         task_raw_to_fact_matchs,
         task_update_puuid_status,
