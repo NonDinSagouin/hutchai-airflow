@@ -115,7 +115,7 @@ with DAG(
 
     Custom.get_ddragon_version()
 
-    task_get_champions_list = extraction.ApiProviders.get(
+    task_get_champions_list = extraction.Api_providers.get(
         conn_id="API_LOL_ddragon",
         endpoint=f"/cdn/{Custom.get_ddragon_version()}/data/fr_FR/champion.json",
         to_dataframe=False,

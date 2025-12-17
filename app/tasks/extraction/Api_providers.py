@@ -1,12 +1,11 @@
 import logging
-import requests
 import pandas as pd
 
 import app.manager as manager
 import app.helper as helper
 from app.tasks.decorateurs import customTask
 
-class ApiProviders():
+class Api_providers():
 
     @customTask
     @staticmethod
@@ -16,6 +15,7 @@ class ApiProviders():
         to_dataframe: bool = True,
         xcom_strategy: str = 'auto',
         file_format: str = 'parquet',
+        headers: dict = None,
         **kwargs
     ) -> pd.DataFrame | dict | str:
         """ Tâche basique d'exemple qui imprime un message de bienvenue.
@@ -26,12 +26,13 @@ class ApiProviders():
             to_dataframe (bool, optional): Convertir les données en DataFrame pandas. Defaults to True.
             xcom_strategy (str, optional): Stratégie de stockage XCom ('auto', 'direct', 'file'). Defaults to 'auto'.
             file_format (str, optional): Format de fichier pour le stockage XCom ('json' ou 'parquet'). Defaults to 'parquet'.
+            headers (dict, optional): En-têtes HTTP supplémentaires pour l'appel API. Defaults to None.
 
         Returns:
             pd.DataFrame | dict | str: Données récupérées depuis l'API, sous forme de DataFrame, dictionnaire ou chaîne de caractères selon les paramètres.
 
         Examples:
-            >>> ApiProviders.get(
+            >>> Api_providers.get(
             ...     conn_id="my_api_connection",
             ...     endpoint="/data",
             ...     to_dataframe=True,
@@ -53,15 +54,19 @@ class ApiProviders():
         url = f"{http_details['host']}{endpoint}"
         logging.info(f"⏳ Appel API vers: {url}")
 
+        # Fusion des en-têtes de connexion et des en-têtes supplémentaires
+        all_headers = http_details.get('headers', {})
+        if headers: all_headers.update(headers)
+
         data = helper.call_api(
             url=url,
-            headers=http_details.get('headers', {})
+            headers=all_headers
         )
 
         if to_dataframe:
             data = pd.json_normalize(data)
             logging.info(f"✅ Données converties en DataFrame pandas avec succès. Dimensions: {data.shape}.")
-        
+
         return manager.Xcom.put(
             input=data,
             xcom_strategy=xcom_strategy,

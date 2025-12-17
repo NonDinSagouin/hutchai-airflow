@@ -2,6 +2,7 @@ import sys
 import os
 import logging
 import requests
+import pandas as pd
 
 from datetime import datetime, timedelta
 
@@ -52,7 +53,7 @@ class Custom():
 
         if lol_puuid is None or lol_puuid == "":
             raise ValueError("❌ La variable 'LOL_puuid' n'est pas définie dans Airflow.")
-        
+
         Custom.__init__()
 
         all_matches = []
@@ -120,12 +121,18 @@ class Custom():
 
         for participant in info_participants:
             stats = {
-                "championId": participant.get('championId'),   
+                "matchId": metadata.get('matchId'),
+                "gameCreation": datetime.fromtimestamp(match_data.get('gameCreation') / 1000).strftime('%Y-%m-%d %H:%M:%S'),
+                "gameVersion": info.get('gameVersion'),
+                "gameMode": info.get('gameMode'),
+
+                "championId": participant.get('championId'),
                 "championName": participant.get('championName'),
 
                 "kills": participant.get('kills'),
                 "deaths": participant.get('deaths'),
                 "assists": participant.get('assists'),
+                "kda": round((participant.get('kills') + participant.get('assists')) / max(1, participant.get('deaths')), 2),
                 "doubleKills": participant.get('doubleKills'),
                 "tripleKills": participant.get('tripleKills'),
                 "quadraKills": participant.get('quadraKills'),
@@ -152,7 +159,7 @@ class Custom():
                 "champLevel": participant.get('champLevel'),
                 "champExperience": participant.get('champExperience'),
             }
-            
+
             stats_participants.append(stats)
             logging.debug(f"✅ Statistiques de {stats.get('championName')} récupérées")
 
@@ -160,7 +167,7 @@ class Custom():
 
         match_statics = {
             "puuid_participants": puuid_participants,
-            "match_data" : match_data, 
+            "match_data" : match_data,
             "stats_participants": stats_participants,
         }
 
@@ -168,6 +175,33 @@ class Custom():
             input=match_statics,
             **context
         )
+
+    @customTask
+    @staticmethod
+    def stats_participants_transform(
+        xcmm_source: dict,
+        **context
+    ) -> pd.DataFrame:
+        """ Tâche personnalisée pour extraire les statistiques des participants d'un match.
+
+        Args:
+            match_details (dict): Les détails du match.
+
+        Returns:
+            list: Une liste des statistiques des participants.
+        """
+
+        match_details = manager.Xcom.get(
+            xcom_source=xcmm_source,
+            **context
+        )
+
+        stats_participants = match_details.get('stats_participants')
+        df_stats_participants = pd.DataFrame(stats_participants)
+
+        logging.info(f"✅ Extraction des statistiques des participants réussie: {len(df_stats_participants)} participants")
+
+        return df_stats_participants
 
     @staticmethod
     def __get_matches(
@@ -193,7 +227,7 @@ class Custom():
             url=url,
             headers=Custom.HTTP_HEADERS,
         )
-    
+
     @staticmethod
     def __get_match_details(
         match_id: str,
@@ -229,16 +263,16 @@ class Custom():
 
         if not Custom.LOL_RIOT_TOKEN:
             raise ValueError("❌ La variable 'LOL_Riot-Token' n'est pas définie dans Airflow.")
-        
+
         if not Custom.HTTP_HOST:
             raise ValueError("❌ Le host de l'API Riot Games n'est pas défini dans Airflow.")
-        
+
         if not Custom.HTTP_HEADERS:
             raise ValueError("❌ Les headers de l'API Riot Games ne sont pas définis dans Airflow.")
-        
+
         if 'X-Riot-Token' not in Custom.HTTP_HEADERS:
             raise ValueError("❌ Le header 'X-Riot-Token' de l'API Riot Games n'est pas défini dans Airflow.")
-        
+
         if not Custom.HTTP_HEADERS['X-Riot-Token']:
             raise ValueError("❌ Le header 'X-Riot-Token' de l'API Riot Games est vide dans Airflow.")
 
@@ -271,7 +305,23 @@ with DAG(
         xcom_match_id="task_fetch_matchs",
     )
 
+    task_stats_participants_transform = Custom.stats_participants_transform(
+        task_id = "task_stats_participants_transform",
+        xcmm_source="task_fetch_match_details",
+    )
+
+    task_insert_stats_participants = load.Warehouse.insert(
+        task_id="task_insert_stats_participants",
+        xcom_source="task_stats_participants_transform",
+        engine=manager.Connectors.postgres("POSTGRES_warehouse"),
+        table_name="lol_stats",
+        schema="lol_datas",
+        if_table_exists="replace",
+    )
+
     chain(
         task_fetch_matchs,
         task_fetch_match_details,
+        task_stats_participants_transform,
+        task_insert_stats_participants,
     )

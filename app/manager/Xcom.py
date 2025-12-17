@@ -59,7 +59,7 @@ class Xcom:
                     data = pd.read_parquet(data)
                 except Exception as e:
                     raise AirflowFailException(f"❌ Erreur lecture parquet: {str(e)}")
-                
+
                 logging.info(f"✅ Fichier parquet chargé avec succès")
 
             elif data.endswith('.json'):
@@ -67,7 +67,7 @@ class Xcom:
                     with open(data, 'r') as f: data = json.load(f)
                 except Exception as e:
                     raise AirflowFailException(f"❌ Erreur lecture JSON: {str(e)}")
-                
+
                 logging.info(f"✅ Fichier JSON chargé avec succès")
 
             else:
@@ -116,7 +116,7 @@ class Xcom:
 
         if xcom_strategy not in ['direct', 'file', 'auto']:
             raise AirflowFailException("❌ Le paramètre 'xcom_strategy' doit être 'direct', 'file' ou 'auto'.")
-        
+
         if file_format not in ['json', 'parquet']:
             raise AirflowFailException("❌ Le paramètre 'file_format' doit être 'json' ou 'parquet'.")
 
@@ -148,7 +148,7 @@ class Xcom:
         if xcom_strategy == 'file':
 
             task_id = ti.task_id
-            
+
             # Déterminer l'extension selon le format et le type de données
             if file_format == 'json': output = Xcom.__file_strategy_json(input, tmp_folder, task_id, timestamp)
             else: output = Xcom.__file_strategy_parquet(input, tmp_folder, task_id, timestamp)
@@ -156,11 +156,11 @@ class Xcom:
             logging.info(f"✅ Données sauvegardées dans: {output}")
 
         elif xcom_strategy == 'direct':
-            logging.info(f"✅ Données prêtes pour stockage direct dans XCom")
+            logging.info("✅ Données prêtes pour stockage direct dans XCom")
             output = input
 
         Xcom.clean_tmp_files(tmp_folder=tmp_folder, older_than_minutes=60)
-        helper.logging_title(f"✅ Données préparées pour XCom.", lvl=3, close=True)
+        helper.logging_title("✅ Données préparées pour XCom.", lvl=3, close=True)
         return output
 
     @staticmethod
@@ -225,7 +225,7 @@ class Xcom:
 
         logging.info(f"💾 Fichier Parquet sauvegardé avec succès")
         return filepath
-    
+
     @staticmethod
     def clean_tmp_files(
         tmp_folder: str,
