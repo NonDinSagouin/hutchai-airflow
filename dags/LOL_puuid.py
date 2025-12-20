@@ -1,13 +1,12 @@
 import sys
 import os
-import logging
-import requests
 import pandas as pd
+import requests
 
 from datetime import datetime, timedelta
 
 from airflow import DAG
-from airflow.sdk import chain, Variable, Asset
+from airflow.sdk import chain, TaskGroup, Asset
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
@@ -18,10 +17,10 @@ import app.manager as manager
 
 from app.tasks.decorateurs import customTask
 
-DAG_ID = "LOL_matchs"
+DAG_ID = "LOL_puuid"
 DESCRIPTION = ""
 OBJECTIF = ""
-SCHEDULE=timedelta(minutes=2, seconds=10)  # 2min après la fin de chaque run
+SCHEDULE = None
 START_DATE = datetime(2025, 1, 1)
 TAGS = []
 
@@ -31,6 +30,17 @@ default_args = {
     'retries': 0, # Nombre de tentatives avant l'échec d'une tâche
     'retry_delay': timedelta(seconds=10), # Temps entre chaque tentative
 }
+
+class Custom():
+
+    @customTask
+    @staticmethod
+    def vide(**context) -> None:
+        """ Description de la fonction vide.
+        Returns:
+            None
+        """
+        pass
 
 # Définition du DAG
 with DAG(
@@ -52,63 +62,61 @@ with DAG(
     """,
 ) as dag:
 
-    task_get_puuid = load.Warehouse.extract(
-        engine=manager.Connectors.postgres("POSTGRES_warehouse"),
-        table_name="lol_fact_puuid",
-        schema="lol_datas",
-        task_id="task_get_puuid",
-        shema_select={"puuid"},
-        shema_order="date_processed DESC",
-        limit=1,
+    task_fetch_entries_by_league = extraction.Api_riotgames.fetch_entries_by_league(
+        task_id='task_fetch_entries_by_league',
+        division='IV',
+        tier='IRON',
+        queue='RANKED_SOLO_5x5',
+        max_pages=10,
     )
 
-    task_fetch_matchs_by_puuid = extraction.Api_riotgames.fetch_matchs_by_puuid(
-        task_id = "task_fetch_matchs_by_puuid",
-        xcom_source="task_get_puuid",
-        queue=440,
+    task_rename_columns = transformation.Clean.rename_columns(
+        task_id="task_rename_columns",
+        xcom_source="task_fetch_entries_by_league",
+        columns_mapping={
+            "queueType": "queue_type",
+        },
     )
 
-    task_insert_raw_matchs = load.Warehouse.insert(
-        task_id="task_insert_raw_matchs",
-        xcom_source="task_fetch_matchs_by_puuid",
+    task_drop_duplicates = transformation.Clean.drop_duplicates(
+        task_id="task_drop_duplicates",
+        xcom_source="task_rename_columns",
+        subset_columns=["puuid", "queue_type"],
+    )
+
+    task_insert_lol_raw = load.Warehouse.insert(
+        task_id="task_insert_lol_raw",
+        xcom_source="task_drop_duplicates",
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
-        table_name="lol_raw_match_datas_ids",
+        table_name="lol_raw_puuid",
         schema="lol_datas",
         if_table_exists="replace",
         add_technical_columns=True,
     )
 
-    task_raw_to_fact_matchs = load.Warehouse.raw_to_fact(
+    task_raw_to_fact = load.Warehouse.raw_to_fact(
         task_id="task_raw_to_fact",
-        outlets=[Asset('warehouse://lol_datas/lol_fact_match_datas')],
-        source_table="lol_datas.lol_raw_match_datas_ids",
-        target_table="lol_datas.lol_fact_match_datas",
+        outlets=[Asset('warehouse://lol_datas/lol_fact_puuid')],
+        source_table="lol_datas.lol_raw_puuid",
+        target_table="lol_datas.lol_fact_puuid",
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
         has_not_matched=True,
         has_matched=False,
-        join_keys=["match_id"],
+        join_keys=["puuid"],
         non_match_columns={
-            "match_id": "match_id",
-        },
-    )
-
-    task_update_puuid_status = load.Warehouse.update(
-        task_id="task_update_puuid_status",
-        engine=manager.Connectors.postgres("POSTGRES_warehouse"),
-        table_name="lol_fact_puuid",
-        schema="lol_datas",
-        set_values={
-            "date_processed": "CURRENT_TIMESTAMP",
-        },
-        where_conditions={
-            "puuid": "{{ ti.xcom_pull(task_ids='task_get_puuid')['puuid'].iloc[0] }}",
+            "puuid": "puuid",
+            "tier": "tier",
+            'rank': "rank",
+            'wins': "wins",
+            'losses': "losses",
+            'queue_type': "queue_type",
         },
     )
 
     chain(
-        task_get_puuid,
-        task_fetch_matchs_by_puuid,
-        task_insert_raw_matchs,
-        task_raw_to_fact_matchs,
-        task_update_puuid_status,
+        task_fetch_entries_by_league,
+        task_rename_columns,
+        task_drop_duplicates,
+        task_insert_lol_raw,
+        task_raw_to_fact,
     )

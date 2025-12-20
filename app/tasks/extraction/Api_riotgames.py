@@ -1,10 +1,9 @@
 import logging
-import requests
+import hashlib
 import pandas as pd
 
-
 from typing import Any
-from datetime import datetime, timedelta
+from datetime import datetime
 from airflow.sdk import Variable
 from airflow.exceptions import AirflowFailException
 
@@ -15,13 +14,22 @@ from app.tasks.decorateurs import customTask
 class Api_riotgames():
 
     @staticmethod
-    def __awake():
+    def __awake(http = 'classic') -> None:
+        """ Permet d'initialiser les variables nécessaires pour appeler l'API Riot Games.
+        Args:
+            http (str): Type d'instance HTTP à utiliser ('classic' ou 'euw1').
+        """
+
+        if http == 'euw1':
+            Api_riotgames.HTTP_DETAILS = manager.Connectors.http("API_LOL_riot_euw1")
+            Api_riotgames.HTTP_HOST = Api_riotgames.HTTP_DETAILS.get('host', '')
+            Api_riotgames.HTTP_HEADERS = Api_riotgames.HTTP_DETAILS.get('headers', {})
+        else:
+            Api_riotgames.HTTP_DETAILS = manager.Connectors.http("API_LOL_riot")
+            Api_riotgames.HTTP_HOST = Api_riotgames.HTTP_DETAILS.get('host', '')
+            Api_riotgames.HTTP_HEADERS = Api_riotgames.HTTP_DETAILS.get('headers', {})
 
         Api_riotgames.LOL_RIOT_TOKEN = Variable.get("LOL_Riot-Token")
-        Api_riotgames.HTTP_DETAILS = manager.Connectors.http("API_LOL_riot")
-        Api_riotgames.HTTP_HOST = Api_riotgames.HTTP_DETAILS.get('host', '')
-
-        Api_riotgames.HTTP_HEADERS = Api_riotgames.HTTP_DETAILS.get('headers', {})
         Api_riotgames.HTTP_HEADERS['X-Riot-Token'] = Api_riotgames.LOL_RIOT_TOKEN
 
         if not Api_riotgames.LOL_RIOT_TOKEN:
@@ -44,6 +52,7 @@ class Api_riotgames():
         lol_puuid: str,
         start: int,
         count: int,
+        queue: int = 440,
     ) -> list:
         """ Permet de récupérer les identifiants des matchs d'un joueur via l'API Riot Games.
 
@@ -51,6 +60,7 @@ class Api_riotgames():
             lol_puuid (str): Le PUUID du joueur League of Legends.
             start (int): L'index de départ pour la pagination.
             count (int): Le nombre de matchs à récupérer.
+            queue (int): Le type de file d'attente (par défaut 440 pour Ranked Solo/Duo). https://static.developer.riotgames.com/docs/lol/queues.json
 
         Returns:
             list: Une liste d'identifiants de matchs.
@@ -61,7 +71,33 @@ class Api_riotgames():
         # end_timestamp = int(datetime.now().timestamp())
         # &startTime={start_timestamp}&endTime={end_timestamp}
 
-        endpoint = f"/lol/match/v5/matches/by-puuid/{lol_puuid}/ids?start={start}&count={count}"
+        endpoint = f"/lol/match/v5/matches/by-puuid/{lol_puuid}/ids?start={start}&count={count}&queue={queue}"
+        url = f"{Api_riotgames.HTTP_HOST}{endpoint}"
+
+        return helper.call_api(
+            url=url,
+            headers=Api_riotgames.HTTP_HEADERS,
+        )
+
+    @staticmethod
+    def __get_entries_by_league(
+        division: str,
+        tier: str,
+        queue: str,
+        page: int = 1,
+    ) -> Any:
+        """ Permet de récupérer les entrées d'une ligue via l'API Riot Games.
+
+        Args:
+            division (str): La division de la ligue (I, II, III, IV).
+            tier (str): Le tier de la ligue (IRON, BRONZE, SILVER, GOLD, PLATINUM, DIAMOND, EMERALD, DIAMOND).
+            queue (str): Le type de file d'attente (RANKED_SOLO_5x5, RANKED_FLEX_SR, RANKED_FLEX_TT).
+
+        Returns:
+            Any: Les données des entrées de la ligue.
+        """
+
+        endpoint = f"/lol/league/v4/entries/{queue}/{tier}/{division}?page={page}"
         url = f"{Api_riotgames.HTTP_HOST}{endpoint}"
 
         return helper.call_api(
@@ -73,21 +109,18 @@ class Api_riotgames():
     def __treatment_match_detail(
         match_id: str,
     ) -> dict:
-        
+
         endpoint = f"/lol/match/v5/matches/{match_id}"
         url = f"{Api_riotgames.HTTP_HOST}{endpoint}"
-        
+
         match_details = helper.call_api(
             url=url,
             headers=Api_riotgames.HTTP_HEADERS,
         )
         logging.info(f"✅ Récupération des détails du match réussie pour le match ID: {match_id}")
 
-        metadata = match_details.get('metadata')
-        puuid_participants = metadata.get('participants')
-        logging.info(f"✅ PUUID des participants récupérés: {len(puuid_participants)} participants")
-
         info = match_details.get('info')
+        metadata = match_details.get('metadata')
         match_data = {
             "match_id": metadata.get('matchId'),
             "game_creation": info.get('gameCreation'), # Timestamp de création
@@ -95,6 +128,7 @@ class Api_riotgames():
             "game_mode": info.get('gameMode'), # Mode de jeu (CLASSIC, ARAM, etc.)
             "game_version": info.get('gameVersion'), # Version du jeu
             "game_in_progress": info.get('gameEndTimestamp') is None, # Indique si le match est en cours
+            "is_processed": True,
         }
         logging.info(f"✅ Données générales du match récupérées: {match_data}")
 
@@ -103,7 +137,9 @@ class Api_riotgames():
 
         for participant in info_participants:
             stats = {
+                "id": hashlib.md5(f"{metadata.get('matchId')}_{participant.get('puuid')}".encode()).hexdigest(),
                 "match_id": metadata.get('matchId'),
+                "puuid": participant.get('puuid'),
                 "game_creation": datetime.fromtimestamp(match_data.get('game_creation') / 1000).strftime('%Y-%m-%d %H:%M:%S'),
                 "game_version": info.get('gameVersion'),
                 "game_mode": info.get('gameMode'),
@@ -135,6 +171,7 @@ class Api_riotgames():
                 "total_heals_on_teammates": participant.get('totalHealsOnTeammates'),
 
                 "total_minions_killed": participant.get('totalMinionsKilled'),
+                "neutral_minions_killed": participant.get('neutralMinionsKilled'),
                 "gold_earned": participant.get('goldEarned'),
 
                 "champ_level": participant.get('champLevel'),
@@ -147,21 +184,22 @@ class Api_riotgames():
         logging.info(f"✅ Statistiques des participants récupérées: {len(stats_participants)} participants")
 
         return {
-            "puuid_participants": puuid_participants,
             "match_data" : match_data,
             "stats_participants": stats_participants,
         }
-    
+
     @customTask
     @staticmethod
     def fetch_matchs_by_puuid(
         xcom_source: str,
+        queue: int = 440,
         **context
     ) -> Any:
         """ Permet de récupérer les identifiants des matchs d'un joueur via l'API Riot Games.
 
         Args:
             xcom_source (str): Source XCom contenant le PUUID du joueur League of Legends.
+            queue (int): Le type de file d'attente (par défaut 440 pour Ranked Solo/Duo). https://static.developer.riotgames.com/docs/lol/queues.json
             **context: Contexte d'exécution Airflow.
 
         Returns:
@@ -178,6 +216,7 @@ class Api_riotgames():
 
         lol_puuid = lol_puuid['puuid'].iloc[0]
 
+        logging.info(f"✅ Récupération des matchs pour le PUUID: {lol_puuid}")
         Api_riotgames.__awake()
 
         matchs = []
@@ -187,10 +226,10 @@ class Api_riotgames():
 
         while True:
 
-            if nb_iterations > 20:
+            if nb_iterations > 10:
                 raise AirflowFailException("❌ Nombre maximum d'itérations atteint lors de la récupération des matchs.")
 
-            matches = Api_riotgames.__get_matches(lol_puuid, start, count)
+            matches = Api_riotgames.__get_matches(lol_puuid, start, count, queue)
             nb_iterations += 1
 
             if not matches: break
@@ -199,6 +238,10 @@ class Api_riotgames():
             start += count
 
             if start >= 1000: break
+            if len(matches) < count: break
+
+        if not matchs:
+            raise AirflowFailException("❌ Aucun match n'a été récupéré pour le PUUID fourni.")
 
         df_matches = pd.DataFrame(matchs)
         df_matches.columns = ['match_id']
@@ -237,7 +280,6 @@ class Api_riotgames():
 
         all_match_details = {
             "match_data": [],
-            "puuid_participants": [],
             "stats_participants": [],
         }
 
@@ -249,14 +291,83 @@ class Api_riotgames():
 
             if match_details:
                 all_match_details["match_data"].append(match_details["match_data"])
-                all_match_details["puuid_participants"].extend(match_details["puuid_participants"])
                 all_match_details["stats_participants"].extend(match_details["stats_participants"])
 
         all_match_details["match_data"] = pd.DataFrame(all_match_details["match_data"])
-        all_match_details["puuid_participants"] = pd.DataFrame(all_match_details["puuid_participants"], columns=['puuid'])
         all_match_details["stats_participants"] = pd.DataFrame(all_match_details["stats_participants"])
 
         return manager.Xcom.put(
             input=all_match_details,
+            **context
+        )
+
+    @customTask
+    @staticmethod
+    def fetch_entries_by_league(
+        division: str,
+        tier: str,
+        queue: str,
+        max_pages: int = 1,
+        **context
+    ):
+        """ Permet de récupérer les entrées d'une ligue via l'API Riot Games.
+
+        Args:
+            division (str): La division de la ligue (I, II, III, IV).
+            tier (str): Le tier de la ligue (IRON, BRONZE, SILVER, GOLD, PLATINUM, DIAMOND, EMERALD, DIAMOND).
+            queue (str): Le type de file d'attente (RANKED_SOLO_5x5, RANKED_FLEX_SR, RANKED_FLEX_TT).
+            max_pages (int): Le nombre maximum de pages à récupérer.
+            **context: Contexte d'exécution Airflow.
+
+        Returns:
+            Any: DataFrame contenant les entrées de la ligue récupérées.
+
+        Example:
+            >>> fetch_entries_by_league(
+                    division='IV',
+                    tier='IRON',
+                    queue='RANKED_SOLO_5x5',
+                    max_pages=10,
+                )
+                Récupère les entrées de la ligue IRON IV en file d'attente RANKED_SOLO_5x5 sur 10 pages.
+                
+        Raises:
+            AirflowFailException: Si les paramètres fournis sont invalides.
+        """
+
+        if division not in ['I', 'II', 'III', 'IV']:
+            raise AirflowFailException(f"❌ Division '{division}' invalide. Les valeurs valides sont: I, II, III, IV.")
+
+        if tier not in ['IRON', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'DIAMOND', 'EMERALD', 'DIAMOND']:
+            raise AirflowFailException(f"❌ Tier '{tier}' invalide. Les valeurs valides sont: IRON, BRONZE, SILVER, GOLD, PLATINUM, DIAMOND, EMERALD, DIAMOND.")
+
+        if queue not in ['RANKED_SOLO_5x5', 'RANKED_FLEX_SR', 'RANKED_FLEX_TT']:
+            raise AirflowFailException(f"❌ Queue '{queue}' invalide. Les valeurs valides sont: RANKED_SOLO_5x5, RANKED_FLEX_SR, RANKED_FLEX_TT.")
+
+        Api_riotgames.__awake(http='euw1')
+
+        all_entries = []
+
+        for page in range(1, max_pages + 1):
+
+            logging.info(f"✅ Page {page}/{max_pages} ...")
+
+            entries = Api_riotgames.__get_entries_by_league(
+                division=division,
+                tier=tier,
+                queue=queue,
+                page=page,
+            )
+
+            if not entries:
+                break
+
+            all_entries.extend(entries)
+
+        df_entries = pd.DataFrame(all_entries)
+        logging.info(f"✅ Total des entrées récupérées: {len(df_entries)}")
+
+        return manager.Xcom.put(
+            input=df_entries,
             **context
         )

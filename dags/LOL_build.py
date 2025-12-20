@@ -7,7 +7,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 
 from airflow import DAG
-from airflow.sdk import chain, Variable
+from airflow.sdk import chain, Variable, TaskGroup
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
@@ -76,68 +76,94 @@ with DAG(
 
     TYPE_TIMESTAMP = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
 
-    task_create_fact_match_datas = load.Warehouse.create_table(
-        task_id="task_create_fact_match_datas",
-        engine=manager.Connectors.postgres("POSTGRES_warehouse"),
-        schema="lol_datas",
-        table_name="lol_fact_match_datas",
-        columns={
-            "match_id": "VARCHAR(50) PRIMARY KEY",
-            "game_creation": "BIGINT DEFAULT NULL",
-            "game_duration": "BIGINT DEFAULT NULL",
-            "game_mode": "VARCHAR(50) DEFAULT NULL",
-            "game_type": "VARCHAR(50) DEFAULT NULL",
-            "game_version": "VARCHAR(20) DEFAULT NULL",
-            "game_in_progress": "BOOLEAN DEFAULT FALSE",
-            "is_processed": "BOOLEAN DEFAULT FALSE",
-            "tech_date_creation": TYPE_TIMESTAMP,
-            "tech_date_modification": TYPE_TIMESTAMP,
-        },
-    )
-    task_create_fact_puuid = load.Warehouse.create_table(
-        task_id="task_create_fact_puuid",
-        engine=manager.Connectors.postgres("POSTGRES_warehouse"),
-        schema="lol_datas",
-        table_name="lol_fact_puuid",
-        columns={
-            "puuid": "VARCHAR(250) PRIMARY KEY",
-            "game_name": "VARCHAR(100) DEFAULT NULL",
-            "tag_line": "VARCHAR(10) DEFAULT NULL",
-            "date_processed": "TIMESTAMP DEFAULT NULL",
-            "tech_date_creation": TYPE_TIMESTAMP,
-            "tech_date_modification": TYPE_TIMESTAMP,
-        },
-    )
+    with TaskGroup("groupe_initialisation_tables") as groupe_initialisation_tables:
 
-    task_get_match_ids = extraction.Api_providers.get(
-        conn_id="API_LOL_riot",
-        task_id="task_get_match_ids",
-        endpoint="/riot/account/v1/accounts/by-riot-id/JeanPomme/POMM",
-        headers={"X-Riot-Token": Variable.get("LOL_Riot-Token")},
-    )
+        task_create_fact_match_datas = load.Warehouse.create_table(
+            task_id="task_create_fact_match_datas",
+            engine=manager.Connectors.postgres("POSTGRES_warehouse"),
+            schema="lol_datas",
+            table_name="lol_fact_match_datas",
+            columns={
+                "match_id": "VARCHAR(50) PRIMARY KEY",
+                "game_creation": "BIGINT DEFAULT NULL",
+                "game_duration": "BIGINT DEFAULT NULL",
+                "game_mode": "VARCHAR(50) DEFAULT NULL",
+                "game_version": "VARCHAR(20) DEFAULT NULL",
+                "game_in_progress": "BOOLEAN DEFAULT FALSE",
+                "is_processed": "BOOLEAN DEFAULT FALSE",
+                "tech_date_creation": TYPE_TIMESTAMP,
+                "tech_date_modification": TYPE_TIMESTAMP,
+            },
+        )
 
-    task_rename_columns_df = Custom.rename_columns_df(
-        task_id="task_rename_columns_df",
-        xcom_source="task_get_match_ids",
-        columns_mapping={
-            "gameName": "game_name",
-            "tagLine": "tag_line",
-        },
-    )
+        task_create_fact_puuid = load.Warehouse.create_table(
+            task_id="task_create_fact_puuid",
+            engine=manager.Connectors.postgres("POSTGRES_warehouse"),
+            schema="lol_datas",
+            table_name="lol_fact_puuid",
+            columns={
+                "puuid": "VARCHAR(250) NOT NULL",
+                "queue_type": "VARCHAR(30) DEFAULT 'unranked'",
+                "tier": "VARCHAR(10) DEFAULT NULL",
+                "rank": "VARCHAR(4) DEFAULT NULL",
+                "wins": "INTEGER DEFAULT NULL",
+                "losses": "INTEGER DEFAULT NULL",
+                "date_processed": "TIMESTAMP DEFAULT NULL",
+                "tech_date_creation": TYPE_TIMESTAMP,
+                "tech_date_modification": TYPE_TIMESTAMP,
+            },
+            primary_key=["puuid", "queue_type"],
+        )
 
-    task_insert_fact_puuid = load.Warehouse.insert(
-        task_id="task_insert_fact_puuid",
-        xcom_source="task_rename_columns_df",
-        engine=manager.Connectors.postgres("POSTGRES_warehouse"),
-        table_name="lol_fact_puuid",
-        schema="lol_datas",
-        if_exists="ignore",
-    )
+        task_create_stats = load.Warehouse.create_table(
+            task_id="task_create_stats",
+            engine=manager.Connectors.postgres("POSTGRES_warehouse"),
+            schema="lol_datas",
+            table_name="lol_fact_stats",
+            columns={
+                'id': 'VARCHAR(250) PRIMARY KEY',
+                'match_id': 'VARCHAR(50)',
+                'puuid': 'VARCHAR(250)',
+                'game_creation': 'VARCHAR(50)',
+                'game_version': 'VARCHAR(20)',
+                'game_mode': 'VARCHAR(25)',
+                'champion_id': 'integer',
+                'champion_name': 'VARCHAR(100)',
+                'kills': 'integer',
+                'deaths': 'integer',
+                'assists': 'integer',
+                'kda': 'integer',
+                'double_kills': 'integer',
+                'triple_kills': 'integer',
+                'quadra_kills': 'integer',
+                'penta_kills': 'integer',
+                'largest_killing_spree': 'integer',
+                'total_damage_dealt': 'integer',
+                'total_damage_dealt_to_champions': 'integer',
+                'physical_damage_dealt_to_champions': 'integer',
+                'magic_damage_dealt_to_champions': 'integer',
+                'true_damage_dealt_to_champions': 'integer',
+                'largest_critical_strike': 'integer',
+                'total_damage_taken': 'integer',
+                'physical_damage_taken': 'integer',
+                'magic_damage_taken': 'integer',
+                'true_damage_taken': 'integer',
+                'total_heal': 'integer',
+                'total_heals_on_teammates': 'integer',
+                'total_minions_killed': 'integer',
+                'neutral_minions_killed': 'integer',
+                'gold_earned': 'integer',
+                'champ_level': 'integer',
+                'champ_experience': 'integer',
+                "tech_date_creation": TYPE_TIMESTAMP,
+                "tech_date_modification": TYPE_TIMESTAMP,
+            },
+        )
+
+        chain(
+            task_create_fact_match_datas, [task_create_fact_puuid, task_create_stats],
+        )
 
     chain(
-        task_create_fact_match_datas,
-        task_create_fact_puuid,
-        task_get_match_ids,
-        task_rename_columns_df,
-        task_insert_fact_puuid,
+        groupe_initialisation_tables,
     )

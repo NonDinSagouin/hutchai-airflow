@@ -41,7 +41,8 @@ class Warehouse():
         engine: Engine,
         table_name: str,
         schema: str,
-        columns: dict = None
+        columns: dict = None,
+        primary_key: list = None
     ):
         """ Crée une table dans la base de données s'il n'existe pas déjà."""
 
@@ -57,10 +58,23 @@ class Warehouse():
         logging.info(f"⏳ Vérification/création de la table '{schema}.{table_name}'")
 
         try:
+            # Construction des colonnes
+            column_definitions = []
+            if columns:
+                for col, dtype in columns.items():
+                    column_definitions.append(f'{col} {dtype}')
+
+            # Ajout de la clé primaire si spécifiée
+            if primary_key and len(primary_key) > 0:
+                primary_key_str = ', '.join(primary_key)
+                column_definitions.append(f'PRIMARY KEY ({primary_key_str})')
+
+            columns_sql = ', '.join(column_definitions)
+
             with engine.connect() as connection:
                 connection.execute(text(f"""
                     CREATE TABLE IF NOT EXISTS {schema}.{table_name} (
-                        {', '.join([f'{col} {dtype}' for col, dtype in (columns or {}).items()])}
+                        {columns_sql}
                     )
                 """))
                 logging.info(f"✅ Table '{schema}.{table_name}' vérifiée/créée avec succès.")
@@ -86,7 +100,7 @@ class Warehouse():
             execution_date = pendulum.parse(kwargs['ds']).in_timezone(PARIS_TZ)
         else:
             raise KeyError("❌ Aucune date d'exécution trouvée dans le contexte (logical_date, execution_date, ds)")
-        
+
         logging.debug(f"📅 Date d'exécution récupérée : {execution_date}")
         return execution_date
 
@@ -248,7 +262,7 @@ class Warehouse():
 
         if df.empty:
             raise AirflowFailException("❌ Aucune donnée à insérer dans le Data Warehouse (DataFrame vide).")
-        
+
         if add_technical_columns:
             execution_date = Warehouse.__get_execution_date(**kwargs)
             df["tech_dag_id"] = kwargs['dag'].dag_id
@@ -312,16 +326,16 @@ class Warehouse():
 
         if not where_conditions:
             raise ValueError("Aucune condition WHERE spécifiée pour la mise à jour.")
-        
+
         print(where_conditions["puuid"])
 
         # Fonctions SQL natives qui ne doivent pas être paramétrées
         SQL_FUNCTIONS = ['CURRENT_TIMESTAMP', 'CURRENT_DATE', 'CURRENT_TIME', 'NOW()', 'NULL']
-        
+
         # Construction de la clause SET en distinguant les fonctions SQL des valeurs
         set_parts = []
         parameters = {}
-        
+
         for col, val in set_values.items():
             if isinstance(val, str) and val.upper() in SQL_FUNCTIONS:
                 # Fonction SQL native - insérer directement
@@ -330,9 +344,9 @@ class Warehouse():
                 # Valeur paramétrable
                 set_parts.append(f"{col} = :set_{col}")
                 parameters[f"set_{col}"] = val
-        
+
         set_clause = ', '.join(set_parts)
-        
+
         # Construction de la clause WHERE
         where_parts = []
         for col, val in where_conditions.items():
@@ -341,7 +355,7 @@ class Warehouse():
                 val = val.iloc[0] if len(val) > 0 else val
             where_parts.append(f"{col} = :where_{col}")
             parameters[f"where_{col}"] = val
-        
+
         where_clause = ' AND '.join(where_parts)
 
         update_query = f"""
@@ -435,6 +449,7 @@ class Warehouse():
         table_name: str = "test_table",
         schema: str = "public",
         columns: dict = None,
+        primary_key: list = None,
         **kwargs
     ) -> dict:
         """ Crée une table fact dans un entrepôt de données (Data Warehouse).
@@ -443,13 +458,15 @@ class Warehouse():
             engine (Engine): Moteur SQLAlchemy pour la connexion à la base de données.
             table_name (str, optional): Nom de la table à créer. Par défaut "test_table".
             schema (str, optional): Schéma de la base de données. Par défaut "public".
+            columns (dict, optional): Dictionnaire des colonnes et leurs types de données.
+            primary_key (list, optional): Liste des colonnes constituant la clé primaire.
 
         Returns:
             None
         """
 
         Warehouse.__setup_schema(engine, schema)
-        Warehouse.__setup_table(engine, table_name, schema, columns)
+        Warehouse.__setup_table(engine, table_name, schema, columns, primary_key)
 
         logging.info(f"✅ Table '{schema}.{table_name}' prête dans le Data Warehouse.")
 
@@ -513,7 +530,7 @@ class Warehouse():
                     matched = f"""
                     WHEN MATCHED THEN
                         UPDATE SET
-                            {', '.join([f'fact.{col} = raw.{col}' for col in match_columns.keys()])},
+                            {', '.join([f'{col} = raw.{col}' for col in match_columns.keys()])},
                             tech_date_modification = CURRENT_TIMESTAMP
                     """
                     transformation_result['operations_performed'].append('UPDATE')
