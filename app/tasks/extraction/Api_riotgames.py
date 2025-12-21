@@ -1,6 +1,7 @@
 import logging
 import hashlib
 import pandas as pd
+import time
 
 from typing import Any
 from datetime import datetime
@@ -307,7 +308,10 @@ class Api_riotgames():
         division: str,
         tier: str,
         queue: str,
+        min_pages: int = 1,
         max_pages: int = 1,
+        rate_limit_per_batch: int = 100,
+        batch_delay_seconds: int = 120,
         **context
     ):
         """ Permet de récupérer les entrées d'une ligue via l'API Riot Games.
@@ -316,7 +320,10 @@ class Api_riotgames():
             division (str): La division de la ligue (I, II, III, IV).
             tier (str): Le tier de la ligue (IRON, BRONZE, SILVER, GOLD, PLATINUM, DIAMOND, EMERALD, DIAMOND).
             queue (str): Le type de file d'attente (RANKED_SOLO_5x5, RANKED_FLEX_SR, RANKED_FLEX_TT).
+            min_pages (int): Le nombre minimum de pages à récupérer.
             max_pages (int): Le nombre maximum de pages à récupérer.
+            rate_limit_per_batch (int): Nombre de requêtes autorisées par batch avant d'appliquer un délai.
+            batch_delay_seconds (int): Délai en secondes à appliquer après chaque batch de requêtes.
             **context: Contexte d'exécution Airflow.
 
         Returns:
@@ -327,9 +334,13 @@ class Api_riotgames():
                     division='IV',
                     tier='IRON',
                     queue='RANKED_SOLO_5x5',
-                    max_pages=10,
+                    min_pages=1,
+                    max_pages=500,
+                    rate_limit_per_batch=100,
+                    batch_delay_seconds=125,
                 )
-                Récupère les entrées de la ligue IRON IV en file d'attente RANKED_SOLO_5x5 sur 10 pages.
+                Récupère les entrées de la ligue IRON IV en file d'attente RANKED_SOLO_5x5 sur 10 pages 
+                avec une limitation de 100 requêtes par batch et un délai de 125 secondes entre chaque batch.
                 
         Raises:
             AirflowFailException: Si les paramètres fournis sont invalides.
@@ -347,10 +358,18 @@ class Api_riotgames():
         Api_riotgames.__awake(http='euw1')
 
         all_entries = []
+        requests_in_current_batch = 0
 
-        for page in range(1, max_pages + 1):
+        for page in range(min_pages, max_pages + 1):
 
-            logging.info(f"✅ Page {page}/{max_pages} ...")
+            # Vérifier si on a atteint la limite du batch
+            if requests_in_current_batch >= rate_limit_per_batch:
+                logging.warning(f"⏳ Rate limit atteint ({rate_limit_per_batch} requêtes). Pause de {batch_delay_seconds} secondes...")
+                time.sleep(batch_delay_seconds)
+                requests_in_current_batch = 0
+                logging.info(f"✅ Reprise après la pause. Continuation à la page {page}...")
+
+            logging.info(f"📄 Récupération de la page {page}/{max_pages} (requête #{requests_in_current_batch + 1}/{rate_limit_per_batch} du batch actuel)...")
 
             entries = Api_riotgames.__get_entries_by_league(
                 division=division,
@@ -359,13 +378,17 @@ class Api_riotgames():
                 page=page,
             )
 
+            requests_in_current_batch += 1
+
             if not entries:
+                logging.warning(f"⚠️ Aucune entrée trouvée à la page {page}. Fin de la récupération.")
                 break
 
             all_entries.extend(entries)
+            logging.info(f"✅ Page {page} traitée: {len(entries)} entrées récupérées (Total: {len(all_entries)})")
 
         df_entries = pd.DataFrame(all_entries)
-        logging.info(f"✅ Total des entrées récupérées: {len(df_entries)}")
+        logging.info(f"🎉 Total des entrées récupérées: {len(df_entries)} sur {max_pages - min_pages + 1} pages demandées")
 
         return manager.Xcom.put(
             input=df_entries,
