@@ -70,11 +70,6 @@ class Api_riotgames():
             list: Une liste d'identifiants de matchs.
         """
 
-        # Calculer les timestamps des 7 derniers jours
-        # start_timestamp = int((datetime.now() - timedelta(days=7)).timestamp())
-        # end_timestamp = int(datetime.now().timestamp())
-        # &startTime={start_timestamp}&endTime={end_timestamp}
-
         endpoint = f"/lol/match/v5/matches/by-puuid/{lol_puuid}/ids?start={start}&count={count}&queue={queue}"
         url = f"{Api_riotgames.HTTP_HOST}{endpoint}"
 
@@ -115,7 +110,7 @@ class Api_riotgames():
             "puuid_8": puuid_participants[7],
             "puuid_9": puuid_participants[8],
             "puuid_10": puuid_participants[9],
-            "game_creation": info.get('gameCreation'), # Timestamp de création
+            "game_creation": datetime.fromtimestamp(info.get('gameCreation') / 1000), # Timestamp de création
             "game_duration": info.get('gameDuration'), # Durée du match
             "game_mode": info.get('gameMode'), # Mode de jeu (CLASSIC, ARAM, etc.)
             "game_version": info.get('gameVersion'), # Version du jeu
@@ -132,9 +127,6 @@ class Api_riotgames():
                 "id": hashlib.md5(f"{metadata.get('matchId')}_{participant.get('puuid')}".encode()).hexdigest(),
                 "match_id": metadata.get('matchId'),
                 "puuid": participant.get('puuid'),
-                "game_creation": datetime.fromtimestamp(match_data.get('game_creation') / 1000).strftime('%Y-%m-%d %H:%M:%S'),
-                "game_version": info.get('gameVersion'),
-                "game_mode": info.get('gameMode'),
                 "champion_id": participant.get('championId'),
                 "champion_name": participant.get('championName'),
 

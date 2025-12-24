@@ -58,7 +58,7 @@ with DAG(
     task_get_puuid = load.Warehouse.extract(
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
         table_name="lol_fact_puuid_to_process",
-        schema="lol_datas",
+        schema="lol_fact_datas",
         task_id="task_get_puuid",
         schema_select={"puuid"},
         schema_order="date_processed DESC",
@@ -78,7 +78,7 @@ with DAG(
         xcom_source="task_fetch_matchs_by_puuid",
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
         table_name="lol_raw_match_datas_ids",
-        schema="lol_datas",
+        schema="lol_raw_datas",
         if_table_exists="replace",
         add_technical_columns=True,
     )
@@ -86,9 +86,9 @@ with DAG(
     # Transformation des données brutes en données factuelles
     task_raw_to_fact_matchs = load.Warehouse.raw_to_fact(
         task_id="task_raw_to_fact",
-        outlets=[Asset('warehouse://lol_datas/lol_fact_match')],
-        source_table="lol_datas.lol_raw_match_datas_ids",
-        target_table="lol_datas.lol_fact_match",
+        outlets=[Asset('warehouse://lol_fact_datas/lol_fact_match')],
+        source_table="lol_raw_datas.lol_raw_match_datas_ids",
+        target_table="lol_fact_datas.lol_fact_match",
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
         has_not_matched=True,
         has_matched=False,
@@ -103,7 +103,7 @@ with DAG(
         task_id="task_update_puuid_status",
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
         table_name="lol_fact_puuid_to_process",
-        schema="lol_datas",
+        schema="lol_fact_datas",
         set_values={
             "date_processed": "CURRENT_TIMESTAMP",
         },

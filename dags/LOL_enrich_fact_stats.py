@@ -69,7 +69,7 @@ with DAG(
     task_get_matchs = load.Warehouse.extract(
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
         table_name="lol_fact_match",
-        schema="lol_datas",
+        schema="lol_fact_datas",
         task_id="task_get_matchs",
         schema_select={"match_id",},
         schema_where={
@@ -103,16 +103,16 @@ with DAG(
             xcom_source="groupe_stats.task_drop_duplicates_stats",
             engine=manager.Connectors.postgres("POSTGRES_warehouse"),
             table_name="lol_raw_stats",
-            schema="lol_datas",
+            schema="lol_raw_datas",
             if_table_exists="replace",
             add_technical_columns=True,
         )
 
         task_raw_to_fact_stats = load.Warehouse.raw_to_fact(
             task_id="task_raw_to_fact",
-            outlets=[Asset('warehouse://lol_datas/lol_fact_stats')],
-            source_table="lol_datas.lol_raw_stats",
-            target_table="lol_datas.lol_fact_stats",
+            outlets=[Asset('warehouse://lol_fact_datas/lol_fact_stats')],
+            source_table="lol_raw_datas.lol_raw_stats",
+            target_table="lol_fact_datas.lol_fact_stats",
             engine=manager.Connectors.postgres("POSTGRES_warehouse"),
             has_not_matched=True,
             has_matched=False,
@@ -121,9 +121,6 @@ with DAG(
                 'id': 'id',
                 'match_id': 'match_id',
                 'puuid': 'puuid',
-                'game_creation': 'game_creation',
-                'game_version': 'game_version',
-                'game_mode': 'game_mode',
                 'champion_id': 'champion_id',
                 'champion_name': 'champion_name',
                 'kills': 'kills',
@@ -162,6 +159,40 @@ with DAG(
             task_raw_to_fact_stats,
         )
 
+    with TaskGroup("groupe_puuid") as groupe_puuid:
+
+        task_extract_puuid_participants = load.Warehouse.extract_from_dict(
+            task_id="task_extract_puuid_participants",
+            xcom_source="task_fetch_match_details",
+            key = "puuid_participants",
+        )
+
+        task_insert_lol_raw_puuid = load.Warehouse.insert(
+            task_id="task_insert_lol_raw_puuid",
+            xcom_source="groupe_puuid.task_extract_puuid_participants",
+            engine=manager.Connectors.postgres("POSTGRES_warehouse"),
+            table_name="lol_raw_puuid",
+            schema="lol_raw_datas",
+            if_table_exists="replace",
+            add_technical_columns=True,
+        )
+
+        task_raw_to_fact_matchs = load.Warehouse.raw_to_fact(
+            task_id="task_raw_to_fact",
+            outlets=[Asset('warehouse://lol_fact_datas/lol_fact_puuid')],
+            source_table="lol_raw_datas.lol_raw_puuid",
+            target_table="lol_fact_datas.lol_fact_puuid",
+            engine=manager.Connectors.postgres("POSTGRES_warehouse"),
+            has_not_matched=True,
+            has_matched=False,
+            join_keys=["puuid"],
+            non_match_columns={
+                "puuid": "puuid",
+            },
+        )
+
+        chain(task_extract_puuid_participants, task_insert_lol_raw_puuid, task_raw_to_fact_matchs)
+
     with TaskGroup("groupe_match") as groupe_match:
 
         task_extract_match = load.Warehouse.extract_from_dict(
@@ -181,16 +212,16 @@ with DAG(
             xcom_source="groupe_match.task_drop_duplicates_match",
             engine=manager.Connectors.postgres("POSTGRES_warehouse"),
             table_name="lol_raw_match",
-            schema="lol_datas",
+            schema="lol_raw_datas",
             if_table_exists="replace",
             add_technical_columns=True,
         )
 
         task_raw_to_fact_match = load.Warehouse.raw_to_fact(
             task_id="task_raw_to_fact_match",
-            outlets=[Asset('warehouse://lol_datas/lol_fact_match')],
-            source_table="lol_datas.lol_raw_match",
-            target_table="lol_datas.lol_fact_match",
+            outlets=[Asset('warehouse://lol_fact_datas/lol_fact_match')],
+            source_table="lol_raw_datas.lol_raw_match",
+            target_table="lol_fact_datas.lol_fact_match",
             engine=manager.Connectors.postgres("POSTGRES_warehouse"),
             has_not_matched=False,
             has_matched=True,
@@ -225,6 +256,6 @@ with DAG(
     chain(
         task_get_matchs,
         task_fetch_match_details,
-        groupe_stats,
+        [groupe_stats, groupe_puuid,],
         groupe_match,
     )

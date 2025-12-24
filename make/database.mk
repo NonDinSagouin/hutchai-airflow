@@ -6,15 +6,19 @@ setup-db: setup-schema setup_table_lol_fact_match setup_table_lol_fact_puuid set
 	@echo "✅ Initialisation complète de la base de données du warehouse réussie !"
 	
 setup-schema:
-	@echo "🔨 Création du schéma lol_datas dans le warehouse..."
-	@$(DE) $(WAREHOUSE) psql -U warehouse -d warehouse -c "\
-		CREATE SCHEMA IF NOT EXISTS lol_datas;" || { echo "❌ Échec de la création du schéma lol_datas"; exit 1; }
-	@echo "✅ Schéma lol_datas créé avec succès !"
+    @echo "🔨 Création du schéma lol_fact_datas dans le warehouse..."
+    @$(DE) $(WAREHOUSE) psql -U warehouse -d warehouse -c "\
+        CREATE SCHEMA IF NOT EXISTS lol_fact_datas;" || { echo "❌ Échec de la création du schéma lol_fact_datas"; exit 1; }
+    @echo "✅ Schéma lol_fact_datas créé avec succès !"
+    @echo "🔨 Création du schéma lol_raw_datas dans le warehouse..."
+    @$(DE) $(WAREHOUSE) psql -U warehouse -d warehouse -c "\
+        CREATE SCHEMA IF NOT EXISTS lol_raw_datas;" || { echo "❌ Échec de la création du schéma lol_raw_datas"; exit 1; }
+    @echo "✅ Schéma lol_raw_datas créé avec succès !"
 
 setup_table_lol_fact_match: ## Crée la table lol_fact_match dans le warehouse
 	@echo "🔨 Création de la table lol_fact_match dans le warehouse..."
 	@$(DE) $(WAREHOUSE) psql -U warehouse -d warehouse -c "\
-		CREATE TABLE IF NOT EXISTS lol_datas.lol_fact_match ( \
+		CREATE TABLE IF NOT EXISTS lol_fact_datas.lol_fact_match ( \
 			match_id VARCHAR(50) PRIMARY KEY, \
 			puuid_1 VARCHAR(250) DEFAULT NULL, \
 			puuid_2 VARCHAR(250) DEFAULT NULL, \
@@ -26,7 +30,7 @@ setup_table_lol_fact_match: ## Crée la table lol_fact_match dans le warehouse
 			puuid_8 VARCHAR(250) DEFAULT NULL, \
 			puuid_9 VARCHAR(250) DEFAULT NULL, \
 			puuid_10 VARCHAR(250) DEFAULT NULL, \
-			game_creation BIGINT DEFAULT NULL, \
+			game_creation TIMESTAMP DEFAULT NULL, \
 			game_duration BIGINT DEFAULT NULL, \
 			game_mode VARCHAR(50) DEFAULT NULL, \
 			game_version VARCHAR(20) DEFAULT NULL, \
@@ -40,7 +44,7 @@ setup_table_lol_fact_match: ## Crée la table lol_fact_match dans le warehouse
 setup_table_lol_fact_puuid_to_process: ## Crée la table lol_fact_puuid_to_process dans le warehouse
 	@echo "🔨 Création de la table lol_fact_puuid_to_process dans le warehouse..."
 	@$(DE) $(WAREHOUSE) psql -U warehouse -d warehouse -c "\
-		CREATE TABLE IF NOT EXISTS lol_datas.lol_fact_puuid_to_process ( \
+		CREATE TABLE IF NOT EXISTS lol_fact_datas.lol_fact_puuid_to_process ( \
 			puuid VARCHAR(250) PRIMARY KEY, \
 			game_name VARCHAR(100) DEFAULT NULL, \
 			tag_line VARCHAR(50) DEFAULT NULL, \
@@ -53,28 +57,26 @@ setup_table_lol_fact_puuid_to_process: ## Crée la table lol_fact_puuid_to_proce
 setup_table_lol_fact_puuid: ## Crée la table lol_fact_puuid dans le warehouse
 	@echo "🔨 Création de la table lol_fact_puuid dans le warehouse..."
 	@$(DE) $(WAREHOUSE) psql -U warehouse -d warehouse -c "\
-		CREATE TABLE IF NOT EXISTS lol_datas.lol_fact_puuid ( \
+		CREATE TABLE IF NOT EXISTS lol_fact_datas.lol_fact_puuid ( \
 			puuid VARCHAR(250) PRIMARY KEY, \
 			game_name VARCHAR(100) DEFAULT NULL, \
 			tag_line VARCHAR(50) DEFAULT NULL, \
 			queue_type VARCHAR(30) DEFAULT NULL, \
 			tier VARCHAR(10) DEFAULT NULL, \
 			rank VARCHAR(4) DEFAULT NULL, \
+			date_processed TIMESTAMP DEFAULT NULL, \
 			tech_date_creation TIMESTAMP DEFAULT CURRENT_TIMESTAMP, \
 			tech_date_modification TIMESTAMP DEFAULT CURRENT_TIMESTAMP \
 		);" || { echo "❌ Échec de la création de la table lol_fact_puuid"; exit 1; }
 	@echo "✅ Table lol_fact_puuid créée avec succès !"
 
 setup-table-lol_fact_stats: ## Crée la table lol_fact_stats dans le warehouse
-	@echo "🔨 Création de la table lol_fact_puuid dans le warehouse..."
+	@echo "🔨 Création de la table lol_fact_stats dans le warehouse..."
 	@$(DE) $(WAREHOUSE) psql -U warehouse -d warehouse -c "\
-		CREATE TABLE IF NOT EXISTS lol_datas.lol_fact_stats ( \
+		CREATE TABLE IF NOT EXISTS lol_fact_datas.lol_fact_stats ( \
 			id VARCHAR(250) PRIMARY KEY, \
 			match_id VARCHAR(50), \
 			puuid VARCHAR(250), \
-			game_creation VARCHAR(50), \
-			game_version VARCHAR(20), \
-			game_mode VARCHAR(25), \
 			champion_id INTEGER, \
 			champion_name VARCHAR(100), \
 			kills INTEGER, \
@@ -111,6 +113,8 @@ setup-data-puuid: ## Insère des données initiales dans la table lol_fact_puuid
 	@echo "🔨 Récupération du puuid depuis l'API Riot Games..."
 	@RESPONSE=$$(curl -s "https://europe.api.riotgames.com/riot/account/v1/accounts/by-riot-id/JeanPomme/POMM?api_key=${RIOT_API_KEY}"); \
 	PUUID=$$(echo "$$RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('puuid', ''))" 2>/dev/null); \
+	GAME_NAME=$$(echo "$$RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('gameName', ''))" 2>/dev/null); \
+	TAG_LINE=$$(echo "$$RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('tagLine', ''))" 2>/dev/null); \
 	if [ -z "$$PUUID" ] || [ "$$PUUID" = "null" ]; then \
 		echo "❌ Échec de la récupération du puuid depuis l'API"; \
 		echo "📋 Réponse API: $$RESPONSE"; \
@@ -119,8 +123,8 @@ setup-data-puuid: ## Insère des données initiales dans la table lol_fact_puuid
 	echo "✅ PUUID récupéré: $$PUUID"; \
 	echo "🔨 Insertion du puuid dans la table lol_fact_puuid_to_process..."; \
 	$(DE) $(WAREHOUSE) psql -U warehouse -d warehouse -c "\
-		INSERT INTO lol_datas.lol_fact_puuid_to_process (puuid) \
+		INSERT INTO lol_fact_datas.lol_fact_puuid_to_process (puuid, game_name, tag_line) \
 		VALUES \
-		('$$PUUID') \
+		('$$PUUID', '$$GAME_NAME', '$$TAG_LINE') \
 		ON CONFLICT (puuid) DO NOTHING;" || { echo "❌ Échec de l'insertion des données initiales dans la table lol_fact_puuid_to_process"; exit 1; }
 	@echo "✅ Données initiales insérées avec succès dans la table lol_fact_puuid_to_process !"
