@@ -110,9 +110,9 @@ class Warehouse():
         engine: Engine,
         table_name: str = None,
         schema: str = "public",
-        shema_select: str = None,
-        shema_where: str = None,
-        shema_order: str = None,
+        schema_select: str = None,
+        schema_where: str = None,
+        schema_order: str = None,
         limit: int = None,
         **kwargs
     ) -> Any:
@@ -122,9 +122,9 @@ class Warehouse():
             engine (Engine): Moteur SQLAlchemy pour la connexion à la base de données.
             table_name (str, optional): Nom de la table à partir de laquelle extraire les données. Par défaut None.
             schema (str, optional): Schéma de la base de données. Par défaut "public".
-            shema_select (list, optional): Liste des colonnes à sélectionner. Par défaut None (toutes les colonnes).
-            shema_where (dict, optional): Dictionnaire des conditions WHERE pour filtrer les données. Par défaut None (aucun filtre).
-            shema_order (str, optional): Colonne pour ordonner les résultats. Par défaut None (pas d'ordre).
+            schema_select (list, optional): Liste des colonnes à sélectionner. Par défaut None (toutes les colonnes).
+            schema_where (dict, optional): Dictionnaire des conditions WHERE pour filtrer les données. Par défaut None (aucun filtre).
+            schema_order (str, optional): Colonne pour ordonner les résultats. Par défaut None (pas d'ordre).
             limit (int, optional): Limite le nombre de lignes extraites. Par défaut None (aucune limite).
 
         Returns:
@@ -135,23 +135,35 @@ class Warehouse():
             ...     engine=engine,
             ...     table_name="sales_data",
             ...     schema="toto",
-            ...     shema_select=["id", "amount", "date"],
-            ...     shema_where={"region": "North", "year": 2023}
+            ...     schema_select=["id", "amount", "date"],
+            ...     schema_where={"region": "North", "year": 2023}
             ... )
             Extrait les colonnes "id", "amount" et "date" de la table "sales_data" pour les enregistrements où la région est "North" et l'année est 2025.
         """
         query = f"SELECT * FROM {schema}.{table_name} "
 
-        if shema_select:
-            select_columns = ', '.join(shema_select)
+        if schema_select:
+            select_columns = ', '.join(schema_select)
             query = f"SELECT {select_columns} FROM {schema}.{table_name} "
 
-        if shema_where:
-            where_conditions = ' AND '.join([f"{col} = :{col}" for col in shema_where.keys()])
-            query += f"WHERE {where_conditions}"
+        if schema_where:
+            where_conditions = []
+            params = {}
+            
+            for col, val in schema_where.items():
+                # Si la valeur commence par "is" (is null, is not null, etc.), ne pas utiliser de paramètre
+                if isinstance(val, str) and val.lower().startswith('is '):
+                    where_conditions.append(f"{col} {val}")
+                else:
+                    # Sinon, utiliser un paramètre pour l'égalité
+                    where_conditions.append(f"{col} = :{col}")
+                    params[col] = val
+            
+            if where_conditions:
+                query += " WHERE " + " AND ".join(where_conditions)
 
-        if shema_order:
-            query += f" ORDER BY {shema_order}"
+        if schema_order:
+            query += f" ORDER BY {schema_order}"
 
         if limit:
             query += f" LIMIT {limit}"
@@ -161,7 +173,7 @@ class Warehouse():
 
         with engine.begin() as connection:
 
-            result = connection.execute(text(query), **(shema_where or {}))
+            result = connection.execute(text(query), **(schema_where or {}))
             df = pd.DataFrame(result.fetchall(), columns=result.keys())
 
         logging.info(f"✅ Requête exécutée avec succès, {len(df)} lignes extraites.")
@@ -273,7 +285,6 @@ class Warehouse():
         logging.info(f"⏳ Insertion de {len(df)} ligne(s) dans la table '{schema}.{table_name}'")
 
         try:
-            # engine = manager.Connectors.postgres("POSTGRES_warehouse")
             df.to_sql(name=table_name, schema=schema ,con=engine, if_exists=if_table_exists, index=False, chunksize=chunksize, method=method,)
 
         except Exception as e:

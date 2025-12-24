@@ -17,9 +17,10 @@ import app.manager as manager
 
 from app.tasks.decorateurs import customTask
 
-DAG_ID = "LOL_match_details"
+DAG_ID = "LOL_enrich_fact_stats"
 DESCRIPTION = ""
 OBJECTIF = ""
+REMARQUE = ""
 SCHEDULE=timedelta(minutes=2, seconds=10)  # 2min après la fin de chaque run
 START_DATE = datetime(2025, 1, 1)
 TAGS = []
@@ -47,7 +48,7 @@ with DAG(
     dag_id=DAG_ID, # Identifiant unique du DAG
     default_args=default_args, # Dictionnaire contenant les paramètres par défaut des tâches
     start_date=START_DATE, # Date de début du DAG
-    #schedule=SCHEDULE,  # Fréquence d'exécution (CRON ou timedelta)
+    # schedule=SCHEDULE,  # Fréquence d'exécution (CRON ou timedelta)
     tags=TAGS, # Liste de tags pour catégoriser le DAG dans l'UI
     catchup=False, # Exécution des tâches manquées (True ou False)
     max_active_runs=1,  # Limite à 1 exécutions actives en même temps
@@ -59,75 +60,29 @@ with DAG(
 
         ## 🔹 Objectif
         {OBJECTIF}
+
+        ## 🔹 Remarque
+        {REMARQUE}
     """,
 ) as dag:
 
     task_get_matchs = load.Warehouse.extract(
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
-        table_name="lol_fact_match_datas",
+        table_name="lol_fact_match",
         schema="lol_datas",
         task_id="task_get_matchs",
-        shema_select={"match_id",},
-        shema_where={
-            "is_processed": "false",
+        schema_select={"match_id",},
+        schema_where={
+            "is_processed": "is false",
         },
-        limit=90,
+        schema_order="tech_date_creation ASC",
+        limit=1,
     )
 
     task_fetch_match_details = extraction.Api_riotgames.fetch_match_details(
         task_id = "task_fetch_match_details",
         xcom_source="task_get_matchs",
     )
-
-    with TaskGroup("groupe_match_datas") as groupe_match_datas:
-
-        task_extract_match_data = load.Warehouse.extract_from_dict(
-            task_id="task_extract_match_data",
-            xcom_source="task_fetch_match_details",
-            key = "match_data",
-        )
-
-        task_drop_duplicates_match_data = transformation.Clean.drop_duplicates(
-            task_id="task_drop_duplicates_match_data",
-            xcom_source="groupe_match_datas.task_extract_match_data",
-            subset_columns=["match_id"],
-        )
-
-        task_insert_lol_raw_match_data = load.Warehouse.insert(
-            task_id="task_insert_lol_raw_match_data",
-            xcom_source="groupe_match_datas.task_drop_duplicates_match_data",
-            engine=manager.Connectors.postgres("POSTGRES_warehouse"),
-            table_name="lol_raw_match_datas",
-            schema="lol_datas",
-            if_table_exists="replace",
-            add_technical_columns=True,
-        )
-
-        task_raw_to_fact_match_datas = load.Warehouse.raw_to_fact(
-            task_id="task_raw_to_fact",
-            outlets=[Asset('warehouse://lol_datas/lol_fact_match_datas')],
-            source_table="lol_datas.lol_raw_match_datas",
-            target_table="lol_datas.lol_fact_match_datas",
-            engine=manager.Connectors.postgres("POSTGRES_warehouse"),
-            has_not_matched=False,
-            has_matched=True,
-            join_keys=["match_id"],
-            match_columns={
-                "game_creation": "game_creation",
-                "game_duration": "game_duration",
-                "game_mode": "game_mode",
-                "game_version": "game_version",
-                "game_in_progress": "game_in_progress",
-                "is_processed": "true",
-            },
-        )
-
-        chain(
-            task_extract_match_data,
-            task_drop_duplicates_match_data,
-            task_insert_lol_raw_match_data,
-            task_raw_to_fact_match_datas,
-        )
 
     with TaskGroup("groupe_stats") as groupe_stats:
 
@@ -152,6 +107,7 @@ with DAG(
             if_table_exists="replace",
             add_technical_columns=True,
         )
+
         task_raw_to_fact_stats = load.Warehouse.raw_to_fact(
             task_id="task_raw_to_fact",
             outlets=[Asset('warehouse://lol_datas/lol_fact_stats')],
@@ -198,6 +154,7 @@ with DAG(
                 'champ_experience': 'champ_experience',
             },
         )
+        
         chain(
             task_extract_stats,
             task_drop_duplicates_stats,
@@ -205,9 +162,69 @@ with DAG(
             task_raw_to_fact_stats,
         )
 
+    with TaskGroup("groupe_match") as groupe_match:
+
+        task_extract_match = load.Warehouse.extract_from_dict(
+            task_id="task_extract_match",
+            xcom_source="task_fetch_match_details",
+            key = "match_data",
+        )
+
+        task_drop_duplicates_match = transformation.Clean.drop_duplicates(
+            task_id="task_drop_duplicates_match",
+            xcom_source="groupe_match.task_extract_match",
+            subset_columns=["match_id"],
+        )
+
+        task_insert_lol_raw_match = load.Warehouse.insert(
+            task_id="task_insert_lol_raw_match",
+            xcom_source="groupe_match.task_drop_duplicates_match",
+            engine=manager.Connectors.postgres("POSTGRES_warehouse"),
+            table_name="lol_raw_match",
+            schema="lol_datas",
+            if_table_exists="replace",
+            add_technical_columns=True,
+        )
+
+        task_raw_to_fact_match = load.Warehouse.raw_to_fact(
+            task_id="task_raw_to_fact_match",
+            outlets=[Asset('warehouse://lol_datas/lol_fact_match')],
+            source_table="lol_datas.lol_raw_match",
+            target_table="lol_datas.lol_fact_match",
+            engine=manager.Connectors.postgres("POSTGRES_warehouse"),
+            has_not_matched=False,
+            has_matched=True,
+            join_keys=["match_id"],
+            match_columns={
+                "puuid_1": "puuid_1",
+                "puuid_2": "puuid_2",
+                "puuid_3": "puuid_3",
+                "puuid_4": "puuid_4",
+                "puuid_5": "puuid_5",
+                "puuid_6": "puuid_6",
+                "puuid_7": "puuid_7",
+                "puuid_8": "puuid_8",
+                "puuid_9": "puuid_9",
+                "puuid_10": "puuid_10",
+                "game_creation": "game_creation",
+                "game_duration": "game_duration",
+                "game_mode": "game_mode",
+                "game_version": "game_version",
+                "game_in_progress": "game_in_progress",
+                "is_processed": "true",
+            },
+        )
+
+        chain(
+            task_extract_match,
+            task_drop_duplicates_match,
+            task_insert_lol_raw_match,
+            task_raw_to_fact_match,
+        )
+
     chain(
         task_get_matchs,
         task_fetch_match_details,
         groupe_stats,
-        groupe_match_datas,
+        groupe_match,
     )

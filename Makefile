@@ -1,5 +1,9 @@
 PROJECT_NAME=hutchai-airflow
 
+# Charger les variables d'environnement depuis .env
+include .env
+export
+
 # Variables
 DC=docker compose
 COMPOSE_FILE = ./docker-compose.yml

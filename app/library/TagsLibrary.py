@@ -16,6 +16,16 @@ class TagsLibrary():
         data_insertion
     """
 
+    # Jeux vidéo
+    LEAGUE_OF_LEGENDS : str = "league_of_legends"
+    RIOT_GAMES : str = "riot_games"
+
+    # Stockage de données
+    WAREHOUSE : str = "warehouse"
+    DATA_ROWS : str = "data_rows" # données brutes
+    DATA_FACT : str = "data_fact" # données factuelles
+    DATA_DIMENSION : str = "data_dimension" # données dimensionnelles
+
     # Définissez des tags comme des constantes de classe
     DATA_EXTRACTION : str = "data_extraction"
     DATA_INSERTION : str = "data_insertion"

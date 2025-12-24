@@ -1,29 +1,28 @@
 import sys
 import os
-import logging
-import requests
-import pandas as pd
 
 from datetime import datetime, timedelta
 
 from airflow import DAG
-from airflow.sdk import chain, Variable, Asset
+from airflow.sdk import chain, Asset
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 import app.tasks.extraction as extraction
 import app.tasks.load as load
-import app.tasks.transformation as transformation
 import app.manager as manager
+import app.library as library
 
-from app.tasks.decorateurs import customTask
-
-DAG_ID = "LOL_matchs"
-DESCRIPTION = ""
-OBJECTIF = ""
+DAG_ID = "LOL_enrich_fact_matchs"
+DESCRIPTION = "Récupération des informations de matchs des joueurs League of Legends via l'API Riot Games et stockage dans l'entrepôt de données."
+OBJECTIF = " Ce DAG vise à extraire les PUUIDs des joueurs League of Legends depuis une table factuelle, " \
+"interroger l'API Riot Games pour obtenir les identifiants des matchs associés à chaque PUUID," \
+"stocker ces identifiants dans une table de données brutes, puis transformer ces données en une table factuelle dans l'entrepôt de données."
+REMARQUE = "Assurez-vous que les clés API Riot Games sont correctement configurées dans le gestionnaire de connexions avant d'exécuter ce DAG." \
+" Si il n'y a pas de nouvelles données à traiter, le DAG skipera les étapes inutiles."
 SCHEDULE=timedelta(minutes=2, seconds=10)  # 2min après la fin de chaque run
 START_DATE = datetime(2025, 1, 1)
-TAGS = []
+TAGS = [library.TagsLibrary.LEAGUE_OF_LEGENDS, library.TagsLibrary.RIOT_GAMES, library.TagsLibrary.WAREHOUSE, library.TagsLibrary.DATA_ROWS, library.TagsLibrary.DATA_FACT]
 
 default_args = {
     'owner': 'airflow',
@@ -49,25 +48,31 @@ with DAG(
 
         ## 🔹 Objectif
         {OBJECTIF}
+
+        ## 🔹 Remarque
+        {REMARQUE}
     """,
 ) as dag:
 
+    # Extraction des PUUIDs depuis la table factuelle
     task_get_puuid = load.Warehouse.extract(
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
-        table_name="lol_fact_puuid",
+        table_name="lol_fact_puuid_to_process",
         schema="lol_datas",
         task_id="task_get_puuid",
-        shema_select={"puuid"},
-        shema_order="date_processed DESC",
+        schema_select={"puuid"},
+        schema_order="date_processed DESC",
         limit=1,
     )
 
+    # Récupération des identifiants de matchs via l'API Riot Games
     task_fetch_matchs_by_puuid = extraction.Api_riotgames.fetch_matchs_by_puuid(
         task_id = "task_fetch_matchs_by_puuid",
         xcom_source="task_get_puuid",
-        queue=440,
+        queue=450,
     )
 
+    # Insertion des données brutes dans la table d'entrepôt
     task_insert_raw_matchs = load.Warehouse.insert(
         task_id="task_insert_raw_matchs",
         xcom_source="task_fetch_matchs_by_puuid",
@@ -78,11 +83,12 @@ with DAG(
         add_technical_columns=True,
     )
 
+    # Transformation des données brutes en données factuelles
     task_raw_to_fact_matchs = load.Warehouse.raw_to_fact(
         task_id="task_raw_to_fact",
-        outlets=[Asset('warehouse://lol_datas/lol_fact_match_datas')],
+        outlets=[Asset('warehouse://lol_datas/lol_fact_match')],
         source_table="lol_datas.lol_raw_match_datas_ids",
-        target_table="lol_datas.lol_fact_match_datas",
+        target_table="lol_datas.lol_fact_match",
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
         has_not_matched=True,
         has_matched=False,
@@ -92,10 +98,11 @@ with DAG(
         },
     )
 
+    # Mise à jour de la date de traitement des PUUIDs
     task_update_puuid_status = load.Warehouse.update(
         task_id="task_update_puuid_status",
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
-        table_name="lol_fact_puuid",
+        table_name="lol_fact_puuid_to_process",
         schema="lol_datas",
         set_values={
             "date_processed": "CURRENT_TIMESTAMP",
@@ -105,6 +112,7 @@ with DAG(
         },
     )
 
+    # Définition de l'ordre d'exécution des tâches
     chain(
         task_get_puuid,
         task_fetch_matchs_by_puuid,
