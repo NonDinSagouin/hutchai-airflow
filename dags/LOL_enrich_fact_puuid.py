@@ -9,7 +9,7 @@ from airflow.sdk import chain, Asset
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 import app.tasks.extraction as extraction
-import app.tasks.load as load
+import app.tasks.databases as databases
 import app.manager as manager
 import app.library as library
 
@@ -19,9 +19,8 @@ OBJECTIF = "Ce DAG vise à extraire les PUUIDs des joueurs League of Legends dep
 "interroger l'API Riot Games pour obtenir des informations détaillées sur chaque PUUID," \
 "et stocker ces informations dans une table factuelle dédiée dans l'entrepôt de données."
 REMARQUE = "Assurez-vous que les clés API Riot Games sont correctement configurées dans le gestionnaire de connexions avant d'exécuter ce DAG." \
-" Si il n'y a pas de nouvelles données à traiter, le DAG skipera les étapes inutiles." \
-" Ce DAG est programmé pour s'exécuter quotidiennement à 1h du matin."
-SCHEDULE = "0 1 * * *"
+" Si il n'y a pas de nouvelles données à traiter, le DAG skipera les étapes inutiles."
+SCHEDULE = "*/3 19-23 * * *" # Tous les jours toutes les 3 minutes entre 19h et 23h
 START_DATE = datetime(2025, 1, 1)
 TAGS = [library.TagsLibrary.LEAGUE_OF_LEGENDS, library.TagsLibrary.RIOT_GAMES, library.TagsLibrary.WAREHOUSE, library.TagsLibrary.DATA_ROWS, library.TagsLibrary.DATA_FACT]
 
@@ -56,7 +55,7 @@ with DAG(
 ) as dag:
 
     # Extraction des PUUIDs depuis la table factuelle
-    task_get_puuid = load.Warehouse.extract(
+    task_get_puuid = databases.PostgresWarehouse.extract(
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
         table_name="lol_fact_puuid",
         schema="lol_fact_datas",
@@ -68,6 +67,7 @@ with DAG(
         },
         schema_order="date_processed DESC",
         limit=100,
+        skip_empty=True,
     )
 
     # Récupération des informations de PUUID via l'API Riot Games
@@ -77,7 +77,7 @@ with DAG(
     )
 
     # Insertion des données brutes dans la table d'entrepôt
-    task_insert_raw_matchs = load.Warehouse.insert(
+    task_insert_raw_matchs = databases.PostgresWarehouse.insert(
         task_id="task_insert_raw_matchs",
         xcom_source="task_fetch_puuid_info",
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
@@ -88,7 +88,7 @@ with DAG(
     )
 
     # Transformation des données brutes en données factuelles
-    task_raw_to_fact_matchs = load.Warehouse.raw_to_fact(
+    task_raw_to_fact_matchs = databases.PostgresWarehouse.raw_to_fact(
         task_id="task_raw_to_fact",
         outlets=[Asset('warehouse://lol_fact_datas/lol_fact_puuid')],
         source_table="lol_raw_datas.lol_raw_puuid_info",
@@ -103,7 +103,6 @@ with DAG(
             "queue_type": "queue_type",
             "tier": "tier",
             "rank": "rank",
-            "date_processed": "CURRENT_TIMESTAMP",
         },
     )
     

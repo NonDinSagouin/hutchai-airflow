@@ -11,7 +11,7 @@ from airflow.sdk import chain
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 import app.tasks.extraction as extraction
-import app.tasks.load as load
+import app.tasks.databases as databases
 import app.tasks.transformation as transformation
 import app.manager as manager
 
@@ -134,7 +134,7 @@ with DAG(
         xcom_source="task_list_champions",
     )
 
-    task_insert_champions_list = load.Warehouse.insert(
+    task_insert_champions_list = databases.PostgresWarehouse.insert(
         task_id="task_insert_champions_list",
         xcom_source="task_add_tech_info",
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),

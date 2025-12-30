@@ -9,7 +9,7 @@ from airflow.sdk import chain, Asset
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 import app.tasks.extraction as extraction
-import app.tasks.load as load
+import app.tasks.databases as databases
 import app.manager as manager
 import app.library as library
 
@@ -20,15 +20,18 @@ OBJECTIF = " Ce DAG vise à extraire les PUUIDs des joueurs League of Legends de
 "stocker ces identifiants dans une table de données brutes, puis transformer ces données en une table factuelle dans l'entrepôt de données."
 REMARQUE = "Assurez-vous que les clés API Riot Games sont correctement configurées dans le gestionnaire de connexions avant d'exécuter ce DAG." \
 " Si il n'y a pas de nouvelles données à traiter, le DAG skipera les étapes inutiles."
-SCHEDULE=timedelta(minutes=2, seconds=10)  # 2min après la fin de chaque run
+SCHEDULE = "0 09 * * *"  # 09h00 tous les jours
 START_DATE = datetime(2025, 1, 1)
 TAGS = [library.TagsLibrary.LEAGUE_OF_LEGENDS, library.TagsLibrary.RIOT_GAMES, library.TagsLibrary.WAREHOUSE, library.TagsLibrary.DATA_ROWS, library.TagsLibrary.DATA_FACT]
+
+LIMIT_PUUID = 10  # Nombre de PUUIDs à traiter par exécution
+QUEUE_ARAM = 450  # Nombre de matchs à récupérer par PUUID
 
 default_args = {
     'owner': 'airflow',
     'depends_on_past': False, # Attendre l'exécution précédente
-    'retries': 0, # Nombre de tentatives avant l'échec d'une tâche
-    'retry_delay': timedelta(seconds=10), # Temps entre chaque tentative
+    'retries': 1, # Nombre de tentatives avant l'échec d'une tâche
+    'retry_delay': timedelta(minutes=2, seconds=10), # Temps entre chaque tentative
 }
 
 # Définition du DAG
@@ -36,7 +39,7 @@ with DAG(
     dag_id=DAG_ID, # Identifiant unique du DAG
     default_args=default_args, # Dictionnaire contenant les paramètres par défaut des tâches
     start_date=START_DATE, # Date de début du DAG
-    #schedule=SCHEDULE,  # Fréquence d'exécution (CRON ou timedelta)
+    schedule=SCHEDULE,  # Fréquence d'exécution (CRON ou timedelta)
     tags=TAGS, # Liste de tags pour catégoriser le DAG dans l'UI
     catchup=False, # Exécution des tâches manquées (True ou False)
     max_active_runs=1,  # Limite à 1 exécutions actives en même temps
@@ -55,25 +58,26 @@ with DAG(
 ) as dag:
 
     # Extraction des PUUIDs depuis la table factuelle
-    task_get_puuid = load.Warehouse.extract(
+    task_get_puuid = databases.PostgresWarehouse.extract(
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
         table_name="lol_fact_puuid_to_process",
         schema="lol_fact_datas",
         task_id="task_get_puuid",
         schema_select={"puuid"},
         schema_order="date_processed DESC",
-        limit=1,
+        limit=LIMIT_PUUID,
+        skip_empty=True,
     )
 
     # Récupération des identifiants de matchs via l'API Riot Games
     task_fetch_matchs_by_puuid = extraction.Api_riotgames.fetch_matchs_by_puuid(
         task_id = "task_fetch_matchs_by_puuid",
         xcom_source="task_get_puuid",
-        queue=450,
+        queue=QUEUE_ARAM,
     )
 
     # Insertion des données brutes dans la table d'entrepôt
-    task_insert_raw_matchs = load.Warehouse.insert(
+    task_insert_raw_matchs = databases.PostgresWarehouse.insert(
         task_id="task_insert_raw_matchs",
         xcom_source="task_fetch_matchs_by_puuid",
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
@@ -84,7 +88,7 @@ with DAG(
     )
 
     # Transformation des données brutes en données factuelles
-    task_raw_to_fact_matchs = load.Warehouse.raw_to_fact(
+    task_raw_to_fact_matchs = databases.PostgresWarehouse.raw_to_fact(
         task_id="task_raw_to_fact",
         outlets=[Asset('warehouse://lol_fact_datas/lol_fact_match')],
         source_table="lol_raw_datas.lol_raw_match_datas_ids",
@@ -99,7 +103,7 @@ with DAG(
     )
 
     # Mise à jour de la date de traitement des PUUIDs
-    task_update_puuid_status = load.Warehouse.update(
+    task_update_puuid_status = databases.PostgresWarehouse.update(
         task_id="task_update_puuid_status",
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
         table_name="lol_fact_puuid_to_process",

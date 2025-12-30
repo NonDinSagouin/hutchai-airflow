@@ -76,6 +76,7 @@ class Api_riotgames():
         return helper.call_api(
             url=url,
             headers=Api_riotgames.HTTP_HEADERS,
+            raise_on_error=False,
         )
 
     @staticmethod
@@ -89,6 +90,7 @@ class Api_riotgames():
         match_details = helper.call_api(
             url=url,
             headers=Api_riotgames.HTTP_HEADERS,
+            raise_on_error=False,
         )
         logging.info(f"✅ Récupération des détails du match réussie pour le match ID: {match_id}")
 
@@ -185,6 +187,7 @@ class Api_riotgames():
         puuid_info = helper.call_api(
             url=url,
             headers=Api_riotgames.HTTP_HEADERS,
+            raise_on_error=False,
         )
         logging.info(f"✅ Récupération des informations du PUUID réussie pour le PUUID: {puuid}")
 
@@ -193,7 +196,7 @@ class Api_riotgames():
     @staticmethod
     def __treatment_league_entries(
         puuid: str,
-    ) -> list:
+    ) -> dict:
         
         Api_riotgames.__awake(http='euw1')
         entry_5v5 = {}
@@ -208,13 +211,13 @@ class Api_riotgames():
         logging.info(f"✅ Récupération des informations de classement réussie pour le PUUID: {puuid}")
 
         for entry in league_entries:
-            queueType = entry.get('queueType')
-            if queueType in ['RANKED_SOLO_5x5']: 
+            queue_type = entry.get('queueType')
+            if queue_type in ['RANKED_SOLO_5x5']: 
                 entry_5v5 = entry
                 break
 
         return {
-            "queue_type": entry_5v5.get('queueType'),
+            "queue_type": entry_5v5.get('queue_type'),
             "tier": entry_5v5.get('tier'),
             "rank": entry_5v5.get('rank'),
         }
@@ -237,6 +240,14 @@ class Api_riotgames():
         for index, row in df_puuid.iterrows():
             puuid_info = Api_riotgames.__treatment_puuid_info(row['puuid'])
             league_entries = Api_riotgames.__treatment_league_entries(row['puuid'])
+
+            if not puuid_info:
+                logging.warning(f"⚠️ Aucune information trouvée pour le PUUID: {row['puuid']}")
+                continue
+
+            if not league_entries:
+                logging.warning(f"⚠️ Aucune information de classement trouvée pour le PUUID: {row['puuid']}")
+                continue
 
             df_puuid.at[index, 'puuid'] = row['puuid']
             df_puuid.at[index, 'game_name'] = puuid_info.get('gameName')
@@ -294,6 +305,10 @@ class Api_riotgames():
             matches = Api_riotgames.__get_matches(lol_puuid, start, count, queue)
             nb_iterations += 1
 
+            if matches is None:
+                logging.warning("⚠️ Aucune donnée de match n'a été récupérée.")
+                break
+
             if not matches: break
 
             matchs.extend(matches)
@@ -303,7 +318,7 @@ class Api_riotgames():
             if len(matches) < count: break
 
         if not matchs:
-            raise AirflowFailException("❌ Aucun match n'a été récupéré pour le PUUID fourni.")
+            raise AirflowSkipException("⚠️ Aucun match n'a été récupéré pour le PUUID fourni.")
 
         df_matches = pd.DataFrame(matchs)
         df_matches.columns = ['match_id']
@@ -343,6 +358,7 @@ class Api_riotgames():
         all_match_details = {
             "match_data": [],
             "stats_participants": [],
+            "puuid_participants": [],
         }
 
         nb_iterations = 0
@@ -358,10 +374,14 @@ class Api_riotgames():
                 match_id=match_id,
             )
 
+            if not match_details:
+                logging.warning(f"⚠️ Aucun détail de match n'a été récupéré pour le match ID: {match_id}")
+                continue
+
             if match_details:
                 all_match_details["match_data"].append(match_details["match_data"])
                 all_match_details["stats_participants"].extend(match_details["stats_participants"])
-                all_match_details["puuid_participants"] = match_details["puuid_participants"]
+                all_match_details["puuid_participants"].extend(match_details["puuid_participants"])
 
             nb_iterations += 1
 

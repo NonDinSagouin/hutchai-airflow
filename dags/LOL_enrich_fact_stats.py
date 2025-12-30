@@ -11,17 +11,20 @@ from airflow.sdk import chain, TaskGroup, Asset
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 import app.tasks.extraction as extraction
-import app.tasks.load as load
+import app.tasks.databases as databases
 import app.tasks.transformation as transformation
 import app.manager as manager
 
 from app.tasks.decorateurs import customTask
 
 DAG_ID = "LOL_enrich_fact_stats"
-DESCRIPTION = ""
-OBJECTIF = ""
-REMARQUE = ""
-SCHEDULE=timedelta(minutes=2, seconds=10)  # 2min après la fin de chaque run
+DESCRIPTION = "Récupération des statistiques des matchs des joueurs League of Legends via l'API Riot Games et stockage dans l'entrepôt de données."
+OBJECTIF = " Ce DAG vise à extraire les identifiants des matchs des joueurs League of Legends depuis une table factuelle, " \
+"interroger l'API Riot Games pour obtenir les détails de chaque match," \
+"extraire et stocker les statistiques des participants dans une table factuelle dédiée dans l'entrepôt de données."
+REMARQUE = "Assurez-vous que les clés API Riot Games sont correctement configurées dans le gestionnaire de connexions avant d'exécuter ce DAG." \
+" Si il n'y a pas de nouvelles données à traiter, le DAG skipera les étapes inutiles."
+SCHEDULE = "*/3 10-18 * * *" # Tous les jours toutes les 3 minutes entre 10h et 18h
 START_DATE = datetime(2025, 1, 1)
 TAGS = []
 
@@ -48,7 +51,7 @@ with DAG(
     dag_id=DAG_ID, # Identifiant unique du DAG
     default_args=default_args, # Dictionnaire contenant les paramètres par défaut des tâches
     start_date=START_DATE, # Date de début du DAG
-    # schedule=SCHEDULE,  # Fréquence d'exécution (CRON ou timedelta)
+    schedule=SCHEDULE,  # Fréquence d'exécution (CRON ou timedelta)
     tags=TAGS, # Liste de tags pour catégoriser le DAG dans l'UI
     catchup=False, # Exécution des tâches manquées (True ou False)
     max_active_runs=1,  # Limite à 1 exécutions actives en même temps
@@ -66,7 +69,7 @@ with DAG(
     """,
 ) as dag:
 
-    task_get_matchs = load.Warehouse.extract(
+    task_get_matchs = databases.PostgresWarehouse.extract(
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
         table_name="lol_fact_match",
         schema="lol_fact_datas",
@@ -76,7 +79,8 @@ with DAG(
             "is_processed": "is false",
         },
         schema_order="tech_date_creation ASC",
-        limit=1,
+        limit=200,
+        skip_empty=True,
     )
 
     task_fetch_match_details = extraction.Api_riotgames.fetch_match_details(
@@ -86,7 +90,7 @@ with DAG(
 
     with TaskGroup("groupe_stats") as groupe_stats:
 
-        task_extract_stats = load.Warehouse.extract_from_dict(
+        task_extract_stats = databases.PostgresWarehouse.extract_from_dict(
             task_id="task_extract_stats",
             xcom_source="task_fetch_match_details",
             key = "stats_participants",
@@ -98,7 +102,7 @@ with DAG(
             subset_columns=["id"],
         )
 
-        task_insert_lol_raw_stats = load.Warehouse.insert(
+        task_insert_lol_raw_stats = databases.PostgresWarehouse.insert(
             task_id="task_insert_lol_raw_stats",
             xcom_source="groupe_stats.task_drop_duplicates_stats",
             engine=manager.Connectors.postgres("POSTGRES_warehouse"),
@@ -108,7 +112,7 @@ with DAG(
             add_technical_columns=True,
         )
 
-        task_raw_to_fact_stats = load.Warehouse.raw_to_fact(
+        task_raw_to_fact_stats = databases.PostgresWarehouse.raw_to_fact(
             task_id="task_raw_to_fact",
             outlets=[Asset('warehouse://lol_fact_datas/lol_fact_stats')],
             source_table="lol_raw_datas.lol_raw_stats",
@@ -161,15 +165,21 @@ with DAG(
 
     with TaskGroup("groupe_puuid") as groupe_puuid:
 
-        task_extract_puuid_participants = load.Warehouse.extract_from_dict(
+        task_extract_puuid_participants = databases.PostgresWarehouse.extract_from_dict(
             task_id="task_extract_puuid_participants",
             xcom_source="task_fetch_match_details",
             key = "puuid_participants",
         )
 
-        task_insert_lol_raw_puuid = load.Warehouse.insert(
-            task_id="task_insert_lol_raw_puuid",
+        task_drop_duplicates_stats = transformation.Clean.drop_duplicates(
+            task_id="task_drop_duplicates_stats",
             xcom_source="groupe_puuid.task_extract_puuid_participants",
+            subset_columns=["puuid"],
+        )
+
+        task_insert_lol_raw_puuid = databases.PostgresWarehouse.insert(
+            task_id="task_insert_lol_raw_puuid",
+            xcom_source="groupe_puuid.task_drop_duplicates_stats",
             engine=manager.Connectors.postgres("POSTGRES_warehouse"),
             table_name="lol_raw_puuid",
             schema="lol_raw_datas",
@@ -177,7 +187,7 @@ with DAG(
             add_technical_columns=True,
         )
 
-        task_raw_to_fact_matchs = load.Warehouse.raw_to_fact(
+        task_raw_to_fact_matchs = databases.PostgresWarehouse.raw_to_fact(
             task_id="task_raw_to_fact",
             outlets=[Asset('warehouse://lol_fact_datas/lol_fact_puuid')],
             source_table="lol_raw_datas.lol_raw_puuid",
@@ -191,11 +201,11 @@ with DAG(
             },
         )
 
-        chain(task_extract_puuid_participants, task_insert_lol_raw_puuid, task_raw_to_fact_matchs)
+        chain(task_extract_puuid_participants, task_drop_duplicates_stats, task_insert_lol_raw_puuid, task_raw_to_fact_matchs)
 
     with TaskGroup("groupe_match") as groupe_match:
 
-        task_extract_match = load.Warehouse.extract_from_dict(
+        task_extract_match = databases.PostgresWarehouse.extract_from_dict(
             task_id="task_extract_match",
             xcom_source="task_fetch_match_details",
             key = "match_data",
@@ -207,7 +217,7 @@ with DAG(
             subset_columns=["match_id"],
         )
 
-        task_insert_lol_raw_match = load.Warehouse.insert(
+        task_insert_lol_raw_match = databases.PostgresWarehouse.insert(
             task_id="task_insert_lol_raw_match",
             xcom_source="groupe_match.task_drop_duplicates_match",
             engine=manager.Connectors.postgres("POSTGRES_warehouse"),
@@ -217,7 +227,7 @@ with DAG(
             add_technical_columns=True,
         )
 
-        task_raw_to_fact_match = load.Warehouse.raw_to_fact(
+        task_raw_to_fact_match = databases.PostgresWarehouse.raw_to_fact(
             task_id="task_raw_to_fact_match",
             outlets=[Asset('warehouse://lol_fact_datas/lol_fact_match')],
             source_table="lol_raw_datas.lol_raw_match",

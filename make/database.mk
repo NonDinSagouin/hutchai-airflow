@@ -6,14 +6,14 @@ setup-db: setup-schema setup_table_lol_fact_match setup_table_lol_fact_puuid set
 	@echo "✅ Initialisation complète de la base de données du warehouse réussie !"
 	
 setup-schema:
-    @echo "🔨 Création du schéma lol_fact_datas dans le warehouse..."
-    @$(DE) $(WAREHOUSE) psql -U warehouse -d warehouse -c "\
-        CREATE SCHEMA IF NOT EXISTS lol_fact_datas;" || { echo "❌ Échec de la création du schéma lol_fact_datas"; exit 1; }
-    @echo "✅ Schéma lol_fact_datas créé avec succès !"
-    @echo "🔨 Création du schéma lol_raw_datas dans le warehouse..."
-    @$(DE) $(WAREHOUSE) psql -U warehouse -d warehouse -c "\
-        CREATE SCHEMA IF NOT EXISTS lol_raw_datas;" || { echo "❌ Échec de la création du schéma lol_raw_datas"; exit 1; }
-    @echo "✅ Schéma lol_raw_datas créé avec succès !"
+	@echo "🔨 Création du schéma lol_fact_datas dans le warehouse..."
+	@$(DE) $(WAREHOUSE) psql -U warehouse -d warehouse -c "\
+		CREATE SCHEMA IF NOT EXISTS lol_fact_datas;" || { echo "❌ Échec de la création du schéma lol_fact_datas"; exit 1; }
+	@echo "✅ Schéma lol_fact_datas créé avec succès !"
+	@echo "🔨 Création du schéma lol_raw_datas dans le warehouse..."
+	@$(DE) $(WAREHOUSE) psql -U warehouse -d warehouse -c "\
+		CREATE SCHEMA IF NOT EXISTS lol_raw_datas;" || { echo "❌ Échec de la création du schéma lol_raw_datas"; exit 1; }
+	@echo "✅ Schéma lol_raw_datas créé avec succès !"
 
 setup_table_lol_fact_match: ## Crée la table lol_fact_match dans le warehouse
 	@echo "🔨 Création de la table lol_fact_match dans le warehouse..."

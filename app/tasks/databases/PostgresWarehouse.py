@@ -6,14 +6,14 @@ import pendulum
 from typing import Any
 from sqlalchemy.engine import Engine
 from sqlalchemy import text
-from airflow.exceptions import AirflowFailException
+from airflow.exceptions import AirflowFailException, AirflowSkipException
 
 import app.helper as helper
 import app.manager as manager
 
 from app.tasks.decorateurs import customTask
 
-class Warehouse():
+class PostgresWarehouse():
 
     @staticmethod
     def __setup_schema(engine: Engine, schema: str):
@@ -114,6 +114,7 @@ class Warehouse():
         schema_where: str = None,
         schema_order: str = None,
         limit: int = None,
+        skip_empty: bool = False,
         **kwargs
     ) -> Any:
         """ Extrait des données d'un entrepôt de données (Data Warehouse).
@@ -126,12 +127,13 @@ class Warehouse():
             schema_where (dict, optional): Dictionnaire des conditions WHERE pour filtrer les données. Par défaut None (aucun filtre).
             schema_order (str, optional): Colonne pour ordonner les résultats. Par défaut None (pas d'ordre).
             limit (int, optional): Limite le nombre de lignes extraites. Par défaut None (aucune limite).
+            skip_empty (bool, optional): Si True, saute la tâche si aucune donnée n'est extraite. Par défaut False.
 
         Returns:
             Any: Données extraites sous forme de DataFrame ou autre format selon l'implémentation.
 
         Examples:
-            >>> Warehouse.extract(
+            >>> PostgresWarehouse.extract(
             ...     engine=engine,
             ...     table_name="sales_data",
             ...     schema="toto",
@@ -176,6 +178,15 @@ class Warehouse():
             result = connection.execute(text(query), **(schema_where or {}))
             df = pd.DataFrame(result.fetchall(), columns=result.keys())
 
+        if df.empty:
+            message = "⚠️ Aucune donnée extraite du Data Warehouse."
+
+            if skip_empty:
+                logging.warning(message + " La tâche sera sautée.")
+                raise AirflowSkipException(message + " La tâche sera sautée.")
+
+            logging.warning(message)
+
         logging.info(f"✅ Requête exécutée avec succès, {len(df)} lignes extraites.")
 
         return manager.Xcom.put(
@@ -201,7 +212,7 @@ class Warehouse():
             Any: L'élément extrait du dictionnaire (généralement un DataFrame).
 
         Examples:
-            >>> Warehouse.extract_from_dict(
+            >>> PostgresWarehouse.extract_from_dict(
             ...     xcom_source="fetch_task",
             ...     key="match_data"
             ... )
@@ -218,6 +229,7 @@ class Warehouse():
 
         extracted_data = data[key]
         logging.info(f"✅ Élément '{key}' extrait avec succès du dictionnaire")
+        logging.info(f"ℹ️ Nombre d'éléments extraits: {len(extracted_data) if hasattr(extracted_data, '__len__') else 'N/A'}")
 
         return manager.Xcom.put(
             input=extracted_data,
@@ -252,7 +264,7 @@ class Warehouse():
             dict: Dictionnaire contenant le nom de la table, le schéma et le nombre de lignes insérées.
 
         Examples:
-            >>> Warehouse.insert(
+            >>> PostgresWarehouse.insert(
             ...     xcom_source="extract_task",
             ...     engine=engine,
             ...     table_name="sales_data",
@@ -276,11 +288,11 @@ class Warehouse():
             raise AirflowFailException("❌ Aucune donnée à insérer dans le Data Warehouse (DataFrame vide).")
 
         if add_technical_columns:
-            execution_date = Warehouse.__get_execution_date(**kwargs)
+            execution_date = PostgresWarehouse.__get_execution_date(**kwargs)
             df["tech_dag_id"] = kwargs['dag'].dag_id
             df["tech_execution_date"] = execution_date.strftime("%Y-%m-%d %H:%M:%S")
 
-        Warehouse.__setup_schema(engine, schema)
+        PostgresWarehouse.__setup_schema(engine, schema)
 
         logging.info(f"⏳ Insertion de {len(df)} ligne(s) dans la table '{schema}.{table_name}'")
 
@@ -322,7 +334,7 @@ class Warehouse():
             dict: Dictionnaire contenant le nom de la table, le schéma et le nombre de lignes mises à jour.
 
         Examples:
-            >>> Warehouse.update(
+            >>> PostgresWarehouse.update(
             ...     engine=engine,
             ...     table_name="sales_data",
             ...     schema="public",
@@ -413,7 +425,7 @@ class Warehouse():
             dict: Dictionnaire contenant le nom de la table, le schéma et le nombre de lignes insérées.
 
         Examples:
-            >>> Warehouse.insert_lines(
+            >>> PostgresWarehouse.insert_lines(
             ...     engine=engine,
             ...     table_name="sales_data",
             ...     schema="public",
@@ -429,8 +441,8 @@ class Warehouse():
             logging.warning("❌ Aucune ligne à insérer")
             return
 
-        Warehouse.__setup_schema(engine, schema)
-        Warehouse.__setup_table(engine, table_name, schema)
+        PostgresWarehouse.__setup_schema(engine, schema)
+        PostgresWarehouse.__setup_table(engine, table_name, schema)
 
         try:
             with engine.begin() as connection:
@@ -476,8 +488,8 @@ class Warehouse():
             None
         """
 
-        Warehouse.__setup_schema(engine, schema)
-        Warehouse.__setup_table(engine, table_name, schema, columns, primary_key)
+        PostgresWarehouse.__setup_schema(engine, schema)
+        PostgresWarehouse.__setup_table(engine, table_name, schema, columns, primary_key)
 
         logging.info(f"✅ Table '{schema}.{table_name}' prête dans le Data Warehouse.")
 
