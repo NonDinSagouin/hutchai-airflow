@@ -1,7 +1,4 @@
 import pandas as pd
-import logging
-import pendulum
-
 import app.manager as manager
 
 from typing import Any

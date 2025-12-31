@@ -10,7 +10,7 @@ from airflow.sdk import chain
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-import app.tasks.extraction as extraction
+import app.tasks.api as api
 import app.tasks.databases as databases
 import app.tasks.transformation as transformation
 import app.manager as manager
@@ -115,7 +115,7 @@ with DAG(
 
     Custom.get_ddragon_version()
 
-    task_get_champions_list = extraction.Api_providers.get(
+    task_get_champions_list = api.Providers.get(
         conn_id="API_LOL_ddragon",
         endpoint=f"/cdn/{Custom.get_ddragon_version()}/data/fr_FR/champion.json",
         to_dataframe=False,

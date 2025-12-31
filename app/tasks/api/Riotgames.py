@@ -12,7 +12,7 @@ import app.manager as manager
 import app.helper as helper
 from app.tasks.decorateurs import customTask
 
-class Api_riotgames():
+class Riotgames():
 
     @staticmethod
     def __awake(http = 'classic') -> None:
@@ -22,33 +22,33 @@ class Api_riotgames():
         """
 
         if http == 'euw1':
-            Api_riotgames.HTTP_DETAILS = manager.Connectors.http("API_LOL_riot_euw1")
-            Api_riotgames.HTTP_HOST = Api_riotgames.HTTP_DETAILS.get('host', '')
-            Api_riotgames.HTTP_HEADERS = Api_riotgames.HTTP_DETAILS.get('headers', {})
+            Riotgames.HTTP_DETAILS = manager.Connectors.http("API_LOL_riot_euw1")
+            Riotgames.HTTP_HOST = Riotgames.HTTP_DETAILS.get('host', '')
+            Riotgames.HTTP_HEADERS = Riotgames.HTTP_DETAILS.get('headers', {})
         else:
-            Api_riotgames.HTTP_DETAILS = manager.Connectors.http("API_LOL_riot")
-            Api_riotgames.HTTP_HOST = Api_riotgames.HTTP_DETAILS.get('host', '')
-            Api_riotgames.HTTP_HEADERS = Api_riotgames.HTTP_DETAILS.get('headers', {})
+            Riotgames.HTTP_DETAILS = manager.Connectors.http("API_LOL_riot")
+            Riotgames.HTTP_HOST = Riotgames.HTTP_DETAILS.get('host', '')
+            Riotgames.HTTP_HEADERS = Riotgames.HTTP_DETAILS.get('headers', {})
 
-        Api_riotgames.LOL_RIOT_TOKEN = Variable.get("LOL_Riot-Token")
-        Api_riotgames.HTTP_HEADERS['X-Riot-Token'] = Api_riotgames.LOL_RIOT_TOKEN
+        Riotgames.LOL_RIOT_TOKEN = Variable.get("LOL_Riot-Token")
+        Riotgames.HTTP_HEADERS['X-Riot-Token'] = Riotgames.LOL_RIOT_TOKEN
 
-        Api_riotgames.MAX_ITERATIONS = 100
-        Api_riotgames.SLEEP_BETWEEN_ITERATIONS = 130  # 2 minutes et 10 secondes
+        Riotgames.MAX_ITERATIONS = 100
+        Riotgames.SLEEP_BETWEEN_ITERATIONS = 130  # 2 minutes et 10 secondes
 
-        if not Api_riotgames.LOL_RIOT_TOKEN:
+        if not Riotgames.LOL_RIOT_TOKEN:
             raise AirflowFailException("❌ La variable 'LOL_Riot-Token' n'est pas définie dans Airflow.")
 
-        if not Api_riotgames.HTTP_HOST:
+        if not Riotgames.HTTP_HOST:
             raise AirflowFailException("❌ Le host de l'API Riot Games n'est pas défini dans Airflow.")
 
-        if not Api_riotgames.HTTP_HEADERS:
+        if not Riotgames.HTTP_HEADERS:
             raise AirflowFailException("❌ Les headers de l'API Riot Games ne sont pas définis dans Airflow.")
 
-        if 'X-Riot-Token' not in Api_riotgames.HTTP_HEADERS:
+        if 'X-Riot-Token' not in Riotgames.HTTP_HEADERS:
             raise AirflowFailException("❌ Le header 'X-Riot-Token' de l'API Riot Games n'est pas défini dans Airflow.")
 
-        if not Api_riotgames.HTTP_HEADERS['X-Riot-Token']:
+        if not Riotgames.HTTP_HEADERS['X-Riot-Token']:
             raise AirflowFailException("❌ Le header 'X-Riot-Token' de l'API Riot Games est vide dans Airflow.")
 
     @staticmethod
@@ -71,11 +71,11 @@ class Api_riotgames():
         """
 
         endpoint = f"/lol/match/v5/matches/by-puuid/{lol_puuid}/ids?start={start}&count={count}&queue={queue}"
-        url = f"{Api_riotgames.HTTP_HOST}{endpoint}"
+        url = f"{Riotgames.HTTP_HOST}{endpoint}"
 
         return helper.call_api(
             url=url,
-            headers=Api_riotgames.HTTP_HEADERS,
+            headers=Riotgames.HTTP_HEADERS,
             raise_on_error=False,
         )
 
@@ -85,11 +85,11 @@ class Api_riotgames():
     ) -> dict:
 
         endpoint = f"/lol/match/v5/matches/{match_id}"
-        url = f"{Api_riotgames.HTTP_HOST}{endpoint}"
+        url = f"{Riotgames.HTTP_HOST}{endpoint}"
 
         match_details = helper.call_api(
             url=url,
-            headers=Api_riotgames.HTTP_HEADERS,
+            headers=Riotgames.HTTP_HEADERS,
             raise_on_error=False,
         )
         logging.info(f"✅ Récupération des détails du match réussie pour le match ID: {match_id}")
@@ -180,13 +180,13 @@ class Api_riotgames():
         puuid: str,
     ) -> dict:
         
-        Api_riotgames.__awake()
+        Riotgames.__awake()
         endpoint = f"/riot/account/v1/accounts/by-puuid/{puuid}"
-        url = f"{Api_riotgames.HTTP_HOST}{endpoint}"
+        url = f"{Riotgames.HTTP_HOST}{endpoint}"
 
         puuid_info = helper.call_api(
             url=url,
-            headers=Api_riotgames.HTTP_HEADERS,
+            headers=Riotgames.HTTP_HEADERS,
             raise_on_error=False,
         )
         logging.info(f"✅ Récupération des informations du PUUID réussie pour le PUUID: {puuid}")
@@ -198,15 +198,15 @@ class Api_riotgames():
         puuid: str,
     ) -> dict:
         
-        Api_riotgames.__awake(http='euw1')
+        Riotgames.__awake(http='euw1')
         entry_5v5 = {}
         
         endpoint = f"/lol/league/v4/entries/by-puuid/{puuid}"
-        url = f"{Api_riotgames.HTTP_HOST}{endpoint}"
+        url = f"{Riotgames.HTTP_HOST}{endpoint}"
 
         league_entries = helper.call_api(
             url=url,
-            headers=Api_riotgames.HTTP_HEADERS,
+            headers=Riotgames.HTTP_HEADERS,
         )
         logging.info(f"✅ Récupération des informations de classement réussie pour le PUUID: {puuid}")
 
@@ -238,8 +238,8 @@ class Api_riotgames():
             raise AirflowSkipException("❌ Le PUUID n'a pas été trouvé dans la source XCom fournie.")
 
         for index, row in df_puuid.iterrows():
-            puuid_info = Api_riotgames.__treatment_puuid_info(row['puuid'])
-            league_entries = Api_riotgames.__treatment_league_entries(row['puuid'])
+            puuid_info = Riotgames.__treatment_puuid_info(row['puuid'])
+            league_entries = Riotgames.__treatment_league_entries(row['puuid'])
 
             if not puuid_info:
                 logging.warning(f"⚠️ Aucune information trouvée pour le PUUID: {row['puuid']}")
@@ -286,43 +286,49 @@ class Api_riotgames():
 
         if lol_puuid.empty or 'puuid' not in lol_puuid.columns:
             raise AirflowSkipException("❌ Le PUUID n'a pas été trouvé dans la source XCom fournie.")
-
-        lol_puuid = lol_puuid['puuid'].iloc[0]
-
-        logging.info(f"✅ Récupération des matchs pour le PUUID: {lol_puuid}")
-        Api_riotgames.__awake()
-
+        
         matchs = []
-        start = 0
-        count = 100
-        nb_iterations = 0
 
-        while True:
+        for puuid in lol_puuid['puuid']:
 
-            if nb_iterations > 10:
-                raise AirflowFailException("❌ Nombre maximum d'itérations atteint lors de la récupération des matchs.")
+            if not puuid or not isinstance(puuid, str):
+                raise AirflowSkipException("❌ Le PUUID fourni est invalide.")
 
-            matches = Api_riotgames.__get_matches(lol_puuid, start, count, queue)
-            nb_iterations += 1
+            Riotgames.__awake()
 
-            if matches is None:
-                logging.warning("⚠️ Aucune donnée de match n'a été récupérée.")
-                break
+            start = 0
+            count = 100
+            nb_iterations = 0
 
-            if not matches: break
+            while True:
 
-            matchs.extend(matches)
-            start += count
+                if nb_iterations > 10:
+                    raise AirflowFailException("❌ Nombre maximum d'itérations atteint lors de la récupération des matchs.")
 
-            if start >= 1000: break
-            if len(matches) < count: break
+                matches = Riotgames.__get_matches(puuid, start, count, queue)
+                nb_iterations += 1
+
+                if matches is None:
+                    logging.warning("⚠️ Aucune donnée de match n'a été récupérée.")
+                    break
+
+                if not matches: break
+
+                matchs.extend(matches)
+                start += count
+
+                if start >= 1000: break
+                if len(matches) < count: break
+
+            logging.info(f"✅ Récupération des identifiants de matchs réussie pour le PUUID: {puuid}. Nombre de matchs récupérés: {len(matchs)}")
+
 
         if not matchs:
-            raise AirflowSkipException("⚠️ Aucun match n'a été récupéré pour le PUUID fourni.")
+            raise AirflowSkipException(f"⚠️ Aucun match n'a été récupéré pour le PUUID {puuid}.")
 
         df_matches = pd.DataFrame(matchs)
         df_matches.columns = ['match_id']
-        logging.info(f"✅ Conversion des données de match en DataFrame réussie. Nombre de lignes: {len(df_matches)}")
+        logging.info(f"✅ DataFrame des matchs créé avec {len(df_matches)} entrées.")
 
         return manager.Xcom.put(
             input=df_matches,
@@ -353,7 +359,7 @@ class Api_riotgames():
         if matchs_id.empty or 'match_id' not in matchs_id.columns:
             raise AirflowSkipException("❌ L'identifiant des matchs n'ont pas été trouvés dans la source XCom fournie.")
 
-        Api_riotgames.__awake()
+        Riotgames.__awake()
 
         all_match_details = {
             "match_data": [],
@@ -365,12 +371,12 @@ class Api_riotgames():
 
         for match_id in matchs_id['match_id']:
 
-            if nb_iterations >= Api_riotgames.MAX_ITERATIONS:
+            if nb_iterations >= Riotgames.MAX_ITERATIONS:
                 logging.warning("⚠️ Nombre maximum d'itérations atteint. 2 minutes et 10 secondes de pause avant de continuer...")
-                time.sleep(Api_riotgames.SLEEP_BETWEEN_ITERATIONS)
+                time.sleep(Riotgames.SLEEP_BETWEEN_ITERATIONS)
                 nb_iterations = 0
 
-            match_details = Api_riotgames.__treatment_match_detail(
+            match_details = Riotgames.__treatment_match_detail(
                 match_id=match_id,
             )
 

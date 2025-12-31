@@ -350,8 +350,6 @@ class PostgresWarehouse():
         if not where_conditions:
             raise ValueError("Aucune condition WHERE spécifiée pour la mise à jour.")
 
-        print(where_conditions["puuid"])
-
         # Fonctions SQL natives qui ne doivent pas être paramétrées
         SQL_FUNCTIONS = ['CURRENT_TIMESTAMP', 'CURRENT_DATE', 'CURRENT_TIME', 'NOW()', 'NULL']
 
@@ -388,6 +386,8 @@ class PostgresWarehouse():
         """
 
         logging.info(f"⏳ Exécution de la requête de mise à jour: {update_query}")
+        logging.info(f"Paramètres set : {set_values}")
+        logging.info(f"Paramètres where : {where_conditions}")
 
         try:
             with engine.begin() as connection:

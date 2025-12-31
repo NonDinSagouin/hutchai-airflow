@@ -1,7 +1,5 @@
 import sys
 import os
-import pandas as pd
-import requests
 
 from datetime import datetime, timedelta
 
@@ -10,7 +8,7 @@ from airflow.sdk import chain
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-import app.tasks.extraction as extraction
+import app.tasks.api as api
 import app.tasks.databases as databases
 import app.tasks.transformation as transformation
 import app.manager as manager

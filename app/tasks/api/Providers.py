@@ -5,7 +5,7 @@ import app.manager as manager
 import app.helper as helper
 from app.tasks.decorateurs import customTask
 
-class Api_providers():
+class Providers():
 
     @customTask
     @staticmethod
@@ -32,7 +32,7 @@ class Api_providers():
             pd.DataFrame | dict | str: Données récupérées depuis l'API, sous forme de DataFrame, dictionnaire ou chaîne de caractères selon les paramètres.
 
         Examples:
-            >>> Api_providers.get(
+            >>> Providers.get(
             ...     conn_id="my_api_connection",
             ...     endpoint="/data",
             ...     to_dataframe=True,

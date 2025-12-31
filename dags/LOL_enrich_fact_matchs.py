@@ -8,7 +8,7 @@ from airflow.sdk import chain, Asset
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-import app.tasks.extraction as extraction
+import app.tasks.api as api
 import app.tasks.databases as databases
 import app.manager as manager
 import app.library as library
@@ -58,28 +58,28 @@ with DAG(
 ) as dag:
 
     # Extraction des PUUIDs depuis la table factuelle
-    task_get_puuid = databases.PostgresWarehouse.extract(
+    get_puuid = databases.PostgresWarehouse.extract(
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
         table_name="lol_fact_puuid_to_process",
         schema="lol_fact_datas",
-        task_id="task_get_puuid",
+        task_id="get_puuid",
         schema_select={"puuid"},
-        schema_order="date_processed DESC",
+        schema_order="date_processed ASC",
         limit=LIMIT_PUUID,
         skip_empty=True,
     )
 
     # Récupération des identifiants de matchs via l'API Riot Games
-    task_fetch_matchs_by_puuid = extraction.Api_riotgames.fetch_matchs_by_puuid(
-        task_id = "task_fetch_matchs_by_puuid",
-        xcom_source="task_get_puuid",
+    fetch_matchs_by_puuid = api.Riotgames.fetch_matchs_by_puuid(
+        task_id = "fetch_matchs_by_puuid",
+        xcom_source="get_puuid",
         queue=QUEUE_ARAM,
     )
 
     # Insertion des données brutes dans la table d'entrepôt
-    task_insert_raw_matchs = databases.PostgresWarehouse.insert(
-        task_id="task_insert_raw_matchs",
-        xcom_source="task_fetch_matchs_by_puuid",
+    insert_raw_matchs = databases.PostgresWarehouse.insert(
+        task_id="insert_raw_matchs",
+        xcom_source="fetch_matchs_by_puuid",
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
         table_name="lol_raw_match_datas_ids",
         schema="lol_raw_datas",
@@ -88,8 +88,8 @@ with DAG(
     )
 
     # Transformation des données brutes en données factuelles
-    task_raw_to_fact_matchs = databases.PostgresWarehouse.raw_to_fact(
-        task_id="task_raw_to_fact",
+    raw_to_fact_matchs = databases.PostgresWarehouse.raw_to_fact(
+        task_id="raw_to_fact",
         outlets=[Asset('warehouse://lol_fact_datas/lol_fact_match')],
         source_table="lol_raw_datas.lol_raw_match_datas_ids",
         target_table="lol_fact_datas.lol_fact_match",
@@ -103,8 +103,8 @@ with DAG(
     )
 
     # Mise à jour de la date de traitement des PUUIDs
-    task_update_puuid_status = databases.PostgresWarehouse.update(
-        task_id="task_update_puuid_status",
+    update_puuid_status = databases.PostgresWarehouse.update(
+        task_id="update_puuid_status",
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
         table_name="lol_fact_puuid_to_process",
         schema="lol_fact_datas",
@@ -112,15 +112,15 @@ with DAG(
             "date_processed": "CURRENT_TIMESTAMP",
         },
         where_conditions={
-            "puuid": "{{ ti.xcom_pull(task_ids='task_get_puuid')['puuid'].iloc[0] }}",
+            "puuid": "(select puuid from lol_raw_datas.lol_raw_match_datas_ids)",
         },
     )
 
     # Définition de l'ordre d'exécution des tâches
     chain(
-        task_get_puuid,
-        task_fetch_matchs_by_puuid,
-        task_insert_raw_matchs,
-        task_raw_to_fact_matchs,
-        task_update_puuid_status,
+        get_puuid,
+        fetch_matchs_by_puuid,
+        insert_raw_matchs,
+        raw_to_fact_matchs,
+        update_puuid_status,
     )

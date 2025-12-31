@@ -8,7 +8,7 @@ from airflow.sdk import chain, Asset
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-import app.tasks.extraction as extraction
+import app.tasks.api as api
 import app.tasks.databases as databases
 import app.manager as manager
 import app.library as library
@@ -55,11 +55,11 @@ with DAG(
 ) as dag:
 
     # Extraction des PUUIDs depuis la table factuelle
-    task_get_puuid = databases.PostgresWarehouse.extract(
+    get_puuid = databases.PostgresWarehouse.extract(
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
         table_name="lol_fact_puuid",
         schema="lol_fact_datas",
-        task_id="task_get_puuid",
+        task_id="get_puuid",
         schema_select={"puuid"},
         schema_where={
             "game_name": "is null",
@@ -71,15 +71,15 @@ with DAG(
     )
 
     # Récupération des informations de PUUID via l'API Riot Games
-    task_fetch_puuid_info = extraction.Api_riotgames.fetch_puuid_info(
-        task_id="task_fetch_puuid_info",
-        xcom_source='task_get_puuid',
+    fetch_puuid_info = api.Riotgames.fetch_puuid_info(
+        task_id="fetch_puuid_info",
+        xcom_source='get_puuid',
     )
 
     # Insertion des données brutes dans la table d'entrepôt
-    task_insert_raw_matchs = databases.PostgresWarehouse.insert(
-        task_id="task_insert_raw_matchs",
-        xcom_source="task_fetch_puuid_info",
+    insert_raw_puuid = databases.PostgresWarehouse.insert(
+        task_id="insert_raw_puuid",
+        xcom_source="fetch_puuid_info",
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
         table_name="lol_raw_puuid_info",
         schema="lol_raw_datas",
@@ -88,8 +88,8 @@ with DAG(
     )
 
     # Transformation des données brutes en données factuelles
-    task_raw_to_fact_matchs = databases.PostgresWarehouse.raw_to_fact(
-        task_id="task_raw_to_fact",
+    raw_to_fact_puuid = databases.PostgresWarehouse.raw_to_fact(
+        task_id="raw_to_fact_puuid",
         outlets=[Asset('warehouse://lol_fact_datas/lol_fact_puuid')],
         source_table="lol_raw_datas.lol_raw_puuid_info",
         target_table="lol_fact_datas.lol_fact_puuid",
@@ -108,8 +108,8 @@ with DAG(
     
     # Définition de l'ordre d'exécution des tâches
     chain(
-        task_get_puuid,
-        task_fetch_puuid_info,
-        task_insert_raw_matchs,
-        task_raw_to_fact_matchs,
+        get_puuid,
+        fetch_puuid_info,
+        insert_raw_puuid,
+        raw_to_fact_puuid,
     )
