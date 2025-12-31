@@ -1,13 +1,6 @@
-[![Mise à jour](https://img.shields.io/badge/dernière%20mise%20à%20jour-18/08/2025-blue)](./)
+[![Mise à jour](https://img.shields.io/badge/dernière%20mise%20à%20jour-31/12/2025-blue)](./)
 
 # STRUCTURE DU PROJET AIRFLOW - `dossier dags`
-
-
----
-
-## Changelog
-- 18/08/2025 : Ajout de la documentation des 5 nouveaux DAGs GDP_XXX.
-- 01/08/2025 : Création du README pour le dossier dags.
 
 ---
 
@@ -17,89 +10,62 @@
 1. Organisation et conventions de nommage
 
 ### 🔹Présentation générale
-Le dossier `dags` contient les définitions des DAGs (Directed Acyclic Graphs) d'Apache Airflow pour le projet A2PO. Ces DAGs orchestrent l'ensemble des pipelines de données, depuis l'extraction jusqu'à l'insertion, en passant par les transformations et vérifications.
+Le dossier `dags` contient les définitions des DAGs (Directed Acyclic Graphs) d'Apache Airflow pour le projet. Ces DAGs orchestrent l'ensemble des pipelines de données League of Legends, depuis l'extraction des données via l'API Riot Games jusqu'à l'insertion dans le data warehouse, en passant par les transformations et enrichissements.
 
 ### 🔹Description des DAGs disponibles
 
-- 📥 **Entrants_etudes_import.py**
-Extraction et transformation des données des entrants études.
-_Ce DAG utilise les données d'étude PVDR depuis GCP pour alimenter les tables d'entrants avec les informations nécessaires aux analyses d'études._
+#### DAGs de production League of Legends
 
-- 🚀 **Entrants_etudes_mesure.py**
-Mesures et analyses des données d'entrants études.
-_Pipeline de traitement pour effectuer les mesures et calculs sur les données d'entrants études préalablement importées._
+- 🎮 **LOL_referentiel.py**
+Extraction, transformation et chargement des données de référence des champions League of Legends depuis l'API DDragon vers l'entrepôt de données. Ce DAG permet de maintenir à jour le référentiel des champions avec leurs caractéristiques (nom, ID, titre, description, tags).
+_Planification : Manuel_
 
-- 🚀 **Export_referentiel_a2po.py**
-Export des référentiels A2PO vers Google Cloud Platform.
-_Ce DAG exporte les référentiels d'A2PO et Noisette dans Google Cloud Storage (GCS) puis les charge dans BigQuery. Exécution quotidienne à 02h00._
+- 👤 **LOL_enrich_fact_puuid.py**
+Récupération et enrichissement des informations de PUUID (identifiants de joueurs) League of Legends via l'API Riot Games. Extrait les PUUIDs depuis la table factuelle, interroge l'API pour obtenir des informations détaillées (game_name, tag_line), et met à jour la table factuelle.
+_Planification : Toutes les 3 minutes entre 19h et 23h_
 
-- 🛠️ **Exemples.py**
-DAG d'exemple et de démonstration.
-_DAG exemple pour illustrer l'extraction de données depuis SQL Server d'A2PO et BigQuery de GCP. Utilisé pour les tests et la formation._
+- 🎯 **LOL_enrich_fact_matchs.py**
+Récupération des identifiants de matchs des joueurs League of Legends. Extrait les PUUIDs depuis la table factuelle, interroge l'API Riot Games pour obtenir les identifiants des matchs associés, stocke ces données dans les tables brutes puis factuelles de l'entrepôt.
+_Planification : Quotidien à 09h00_
 
-- 📥 **GDP_etudes_import.py**
-Import des données des études GDP depuis OJS.
-_Ce DAG permet d'importer les données des études depuis OJS vers la table warehouse.GDP_ETUDES. Exécution tous les Dimanche à 18h00._
+- 📊 **LOL_enrich_fact_stats.py**
+Récupération et stockage des statistiques détaillées des matchs League of Legends. Extrait les identifiants de matchs, interroge l'API Riot Games pour obtenir les détails complets, et extrait les statistiques des participants pour les stocker dans une table factuelle dédiée.
+_Planification : Toutes les 3 minutes entre 10h et 18h_
 
-- 🚀 **GDP_etudes_planifie_mesure.py**
-Mesures et analyses des données du planifié des études GDP.
-_Pipeline de traitement pour effectuer les mesures et calculs sur les données du planifié des études en utilisant la table warehouse.GDP_ETUDES. S'exécute à la suite de GDP_etudes_import._
+#### DAGs de test et exemples
 
-- 🚀 **GDP_etudes_realise_mesure.py**
-Mesures et analyses des données du réalisé des études GDP.
-_Pipeline de traitement pour effectuer les mesures et calculs sur les données du réalisé des études en utilisant la table warehouse.GDP_ETUDES. S'exécute à la suite de GDP_etudes_import._
+- 📝 **z_Exemples.py**
+DAG de démonstration contenant des exemples d'utilisation des différentes tâches et patterns disponibles dans le projet. Sert de référence pour le développement de nouveaux DAGs.
 
-- 🚀 **GDP_etudes_stock_aff_mesure.py**
-Mesures et analyses des données du stock affecté des études GDP.
-_Pipeline de traitement pour effectuer les mesures et calculs sur les données du stock affecté des études en utilisant la table warehouse.GDP_ETUDES. S'exécute à la suite de GDP_etudes_import._
+- ⚡ **z_Stress_test.py**
+DAG de tests de performance et de charge pour vérifier la robustesse du système sous contrainte.
 
-- 🚀 **GDP_etudes_stock_exp_mesure.py**
-Mesures et analyses des données du stock exploitable des études GDP.
-_Pipeline de traitement pour effectuer les mesures et calculs sur les données du stock exploitable des études en utilisant la table warehouse.GDP_ETUDES. S'exécute à la suite de GDP_etudes_import._
-
--🔌 **GPA_deploy_files.py**
-Déploiement des fichiers GPA sur le serveur A2PO.
-_Ce DAG permet de déployer les fichiers GPA_indispo et GPA_occupation sur le serveur A2PO suite aux imports correspondants._
-
-- 📥 **GPA_indispo_import.py**
-Import des données d'indisponibilité GPA.
-_Pipeline d'importation et de traitement des données d'indisponibilité depuis les sources GPA vers les systèmes A2PO._
-
-- 📥 **GPA_occupation_import.py**
-Import des données d'occupation GPA.
-_Pipeline d'importation et de traitement des données d'occupation depuis les sources GPA vers les systèmes A2PO._
-
-- 📥 **ML_FTTH_import.py**
-Import des données de prévision FTTH par Machine Learning.
-_Ce DAG importe les données de prévision FTTH depuis GCP et les insère dans la base de données A2PO. Exécution mensuelle le 7 de chaque mois à 01h00._
-
-- 📥 **Realise_contrast_import.py**
-Import des données de réalisé contrasté.
-_Pipeline d'importation des données de réalisé contrasté pour les analyses de performance et de comparaison._
-
-- 🚀 **Realise_contrast_mesure.py**
-Mesures et analyses des données de réalisé contrasté.
-_Pipeline de traitement pour effectuer les mesures et calculs sur les données de réalisé contrasté préalablement importées._
+- 🗂️ **z_vide.py**
+DAG template vide servant de base pour la création de nouveaux DAGs.
 
 ### 🔹Organisation et conventions de nommage
 
 #### Structure des noms de fichiers :
-- **[Domaine]_[Action]_[Type].py** : Convention principale
-  - `Domaine` : Source ou contexte métier (GPA, ML_FTTH, Entrants_etudes, etc.)
-  - `Action` : Type d'opération (import, export, deploy, mesure)
+- **[Domaine]_[Action]_[Ressource].py** : Convention principale
+  - `Domaine` : Contexte métier ou projet (LOL pour League of Legends)
+  - `Action` : Type d'opération (referentiel, enrich, extract, transform, etc.)
+  - `Ressource` : Type de données traitées (fact_puuid, fact_matchs, fact_stats)
 
 #### Catégories de DAGs :
-- **Import** : DAGs d'importation de données depuis différentes sources
-- **Export** : DAGs d'exportation vers des systèmes externes
-- **Mesure** : DAGs de calcul et d'analyse des données
-- **Deploy** : DAGs de déploiement de fichiers ou configurations
-- **Exemple** : DAGs de démonstration et d'apprentissage
+- **Referentiel** : DAGs de gestion des données de référence
+- **Enrich** : DAGs d'enrichissement de données factuelles depuis des APIs
+- **Exemples/Tests** : DAGs préfixés par `z_` pour la démonstration et les tests
 
 #### Planification commune :
-- **Quotidien** : Export_referentiel_a2po (02h00)
-- **Hebdomadaire** : GDP_etudes_import (Dimanche à 18h00)
-- **Mensuel** : ML_FTTH_import (7 de chaque mois à 01h00)
-- **Sur déclenchement** : La plupart des DAGs d'import et de mesure, GDP_etudes_XXX_mesure (suite à GDP_etudes_import)
-- **Manuel/Test** : Exemples
+- **Quotidien** : LOL_enrich_fact_matchs (09h00)
+- **Haute fréquence** : LOL_enrich_fact_puuid (*/3 19-23), LOL_enrich_fact_stats (*/3 10-18)
+- **Manuel/Test** : LOL_referentiel, z_Exemples, z_Stress_test, z_vide
+
+#### Tags utilisés :
+- `league_of_legends` : DAGs relatifs à League of Legends
+- `riot_games` : DAGs utilisant l'API Riot Games
+- `warehouse` : DAGs interagissant avec le data warehouse
+- `data_rows` : DAGs gérant les données brutes
+- `data_fact` : DAGs gérant les données factuelles
 
 Pour plus d'informations sur chaque DAG, consulter les commentaires et la documentation intégrée dans chaque fichier.
