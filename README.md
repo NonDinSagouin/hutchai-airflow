@@ -1,7 +1,26 @@
-[![Mise à jour](https://img.shields.io/badge/dernière%20mise%20à%20jour-31/12/2025-blue)](./)
-![Airflow](https://img.shields.io/badge/Airflow-3.1.3%2B-blue?logo=apacheairflow)
+# 🚀 Hutchai Airflow
 
-# STRUCTURE GÉNÉRALE DU PROJET `hutchai-airflow`
+[![Mise à jour](https://img.shields.io/badge/dernière%20mise%20à%20jour-31/12/2025-blue)](./)
+[![Version](https://img.shields.io/badge/Version-0.1.0-brightgreen.svg)]()
+[![Status](https://img.shields.io/badge/Status-Active-success.svg)]()
+[![License](https://img.shields.io/badge/License-MIT-red.svg)](LICENSE)
+
+![Airflow](https://img.shields.io/badge/Airflow-3.1.3%2B-017CEE?logo=apacheairflow&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.x-3670A0?logo=python&logoColor=white)
+[![Docker](https://img.shields.io/badge/Docker-Enabled-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Data%20Warehouse-316192?logo=postgresql&logoColor=white)
+
+## 🛠️ Technologies utilisées
+![Apache Airflow](https://img.shields.io/badge/Apache%20Airflow-017CEE?style=for-the-badge&logo=Apache%20Airflow&logoColor=white)
+![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
+![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)
+![Make](https://img.shields.io/badge/GNU%20Make-427819.svg?style=for-the-badge&logo=gnu&logoColor=white)
+![Postgres](https://img.shields.io/badge/postgres-%23316192.svg?style=for-the-badge&logo=postgresql&logoColor=white)
+
+![Pandas](https://img.shields.io/badge/pandas-%23150458.svg?style=for-the-badge&logo=pandas&logoColor=white)
+![Apache Spark](https://img.shields.io/badge/Apache%20Spark-E25A1C?style=for-the-badge&logo=apachespark&logoColor=white)
+
+# STRUCTURE GÉNÉRALE DU PROJET
 ---
 
 ### 🔹 Table des matières
