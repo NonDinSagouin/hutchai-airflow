@@ -26,11 +26,14 @@ services:
       - "5000:5000"
       - "5001:5001"
     environment:
+      - MARQUEZ_CONFIG=/usr/src/app/config/config.yml
       - MARQUEZ_DB_HOST=marquez-db
       - MARQUEZ_DB_PORT=5432
       - MARQUEZ_DB_USER=${MARQUEZ_DB_USER}
       - MARQUEZ_DB_PASSWORD=${MARQUEZ_DB_PASSWORD}
       - MARQUEZ_DB_NAME=${MARQUEZ_DB_NAME}
+    volumes:
+      - ../config/marquez/config.yml:/usr/src/app/config/config.yml:ro
     depends_on:
       marquez-db:
         condition: service_healthy
