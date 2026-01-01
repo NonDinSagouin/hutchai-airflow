@@ -1,0 +1,59 @@
+services:
+  marquez-db:
+    image: postgres:16
+    container_name: marquez-db
+    environment:
+      POSTGRES_USER: ${MARQUEZ_DB_USER}
+      POSTGRES_PASSWORD: ${MARQUEZ_DB_PASSWORD}
+      POSTGRES_DB: ${MARQUEZ_DB_NAME}
+    volumes:
+      - marquez-db-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "marquez"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: always
+    ports:
+      - "5434:5432"
+    networks:
+      - airflow_default
+
+  marquez:
+    image: marquezproject/marquez:0.49.0
+    container_name: marquez
+    ports:
+      - "5000:5000"
+      - "5001:5001"
+    environment:
+      - MARQUEZ_DB_HOST=marquez-db
+      - MARQUEZ_DB_PORT=5432
+      - MARQUEZ_DB_USER=${MARQUEZ_DB_USER}
+      - MARQUEZ_DB_PASSWORD=${MARQUEZ_DB_PASSWORD}
+      - MARQUEZ_DB_NAME=${MARQUEZ_DB_NAME}
+    depends_on:
+      marquez-db:
+        condition: service_healthy
+    networks:
+      - airflow_default
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/v1/namespaces"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  marquez-web:
+    image: marquezproject/marquez-web:0.49.0
+    container_name: marquez-web
+    environment:
+      - MARQUEZ_HOST=marquez
+      - MARQUEZ_PORT=5000
+    ports:
+      - "3001:3000"
+    depends_on:
+      - marquez
+    networks:
+      - airflow_default
+    restart: always
