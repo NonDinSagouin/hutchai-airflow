@@ -4,6 +4,8 @@ import re
 import pendulum
 
 from typing import Any
+from datetime import datetime, timezone
+
 from sqlalchemy.engine import Engine
 from sqlalchemy import text
 from airflow.exceptions import AirflowFailException, AirflowSkipException
@@ -149,9 +151,9 @@ class PostgresWarehouse():
             query = f"SELECT {select_columns} FROM {schema}.{table_name} "
 
         if schema_where:
+
             where_conditions = []
             params = {}
-            
             for col, val in schema_where.items():
                 # Si la valeur commence par "is" (is null, is not null, etc.), ne pas utiliser de paramètre
                 if isinstance(val, str) and val.lower().startswith('is '):
@@ -170,7 +172,6 @@ class PostgresWarehouse():
         if limit:
             query += f" LIMIT {limit}"
 
-
         logging.info(f"⏳ Execution de la requête: {query} ...")
 
         with engine.begin() as connection:
@@ -188,6 +189,24 @@ class PostgresWarehouse():
             logging.warning(message)
 
         logging.info(f"✅ Requête exécutée avec succès, {len(df)} lignes extraites.")
+
+        manager.Marquez.event(
+            event_type="COMPLETE",
+            run_id=kwargs['run_id'],
+            event_time=datetime.now(timezone.utc).isoformat(),
+            job_namespace=kwargs['dag'].dag_id,
+            job_name=kwargs['task'].task_id,
+            inputs=[
+                manager.Marquez.build_dataset(
+                    namespace=schema,
+                    name=table_name,
+                    fields=[{"name": col, "type": str(df[col].dtype)} for col in df.columns]
+                )
+            ],
+            outputs=[],
+            description=f"Extraction des données depuis la table {schema}.{table_name}",
+            query=query
+        )
 
         return manager.Xcom.put(
             input=df,

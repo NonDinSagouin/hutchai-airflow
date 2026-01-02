@@ -55,6 +55,9 @@ help: ## Affiche cette aide
 	@echo "⚡ Spark (make/spark.mk)"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' make/spark.mk | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 	@echo ""
+	@echo "📊 Marquez (make/marquez.mk)"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' make/marquez.mk | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@echo ""
 	@echo "🔍 Vérification (make/check.mk)"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' make/check.mk | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 	@echo ""
@@ -67,5 +70,4 @@ include make/airflow.mk
 include make/database.mk
 include make/spark.mk
 include make/check.mk
-
-
+include make/marquez.mk
