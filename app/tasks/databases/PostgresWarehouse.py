@@ -193,7 +193,7 @@ class PostgresWarehouse():
         manager.Marquez.event(
             event_type="COMPLETE",
             run_id=kwargs['run_id'],
-            event_time=kwargs['logical_date'].in_timezone("Europe/Paris"),
+            event_time=kwargs['logical_date'].in_timezone("Europe/Paris").isoformat(),
             job_namespace=kwargs['dag'].dag_id,
             job_name=kwargs['task'].task_id,
             inputs=[

@@ -91,12 +91,12 @@ class Marquez:
                         "_schemaURL": Marquez.SCHEMA_URL,
                         "description": description,
                     },
-                },
-                "sql": {
-                    "_producer": Marquez.PRODUCER,
-                    "_schemaURL": Marquez.SCHEMA_URL,
-                    "query": query
-                },
+                    "sql": {
+                        "_producer": Marquez.PRODUCER,
+                        "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/SqlJobFacet.json",
+                        "query": query
+                    }
+                }
             },
             "inputs": inputs,
             "outputs": outputs,
