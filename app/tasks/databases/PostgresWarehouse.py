@@ -193,12 +193,12 @@ class PostgresWarehouse():
         manager.Marquez.event(
             event_type="COMPLETE",
             run_id=kwargs['run_id'],
-            event_time=datetime.now(timezone.utc).isoformat(),
+            event_time=kwargs['logical_date'].in_timezone("Europe/Paris"),
             job_namespace=kwargs['dag'].dag_id,
             job_name=kwargs['task'].task_id,
             inputs=[
                 manager.Marquez.build_dataset(
-                    namespace=schema,
+                    namespace=kwargs['dag'].dag_id,
                     name=table_name,
                     fields=[{"name": col, "type": str(df[col].dtype)} for col in df.columns]
                 )
