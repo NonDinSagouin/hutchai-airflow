@@ -13,7 +13,7 @@ from airflow.exceptions import AirflowFailException, AirflowSkipException
 import app.helper as helper
 import app.manager as manager
 
-from app.tasks.decorateurs import customTask
+from app.tasks.decorateurs import customTask, marquezTask
 
 class PostgresWarehouse():
 
@@ -107,6 +107,7 @@ class PostgresWarehouse():
         return execution_date
 
     @customTask
+    @marquezTask(description="Extraction des données depuis le Data Warehouse")
     @staticmethod
     def extract(
         engine: Engine,
@@ -144,12 +145,11 @@ class PostgresWarehouse():
             ... )
             Extrait les colonnes "id", "amount" et "date" de la table "sales_data" pour les enregistrements où la région est "North" et l'année est 2025.
         """
-        query = f"SELECT * FROM {schema}.{table_name} "
+        query = f"\n\r SELECT \n\r\t * \n\r FROM \n\r\t {schema}.{table_name} "
 
         if schema_select:
-            select_columns = ', '.join(schema_select)
-            query = f"SELECT {select_columns} FROM {schema}.{table_name} "
-
+            select_columns = '\n\t, '.join(schema_select)
+            query = f"SELECT \n\t{select_columns} \nFROM \n\t{schema}.{table_name} "
         if schema_where:
 
             where_conditions = []
@@ -164,13 +164,13 @@ class PostgresWarehouse():
                     params[col] = val
             
             if where_conditions:
-                query += " WHERE " + " AND ".join(where_conditions)
+                query += "\nWHERE " + "\n\tAND ".join(where_conditions)
 
         if schema_order:
-            query += f" ORDER BY {schema_order}"
+            query += f"\nORDER BY \n\t{schema_order}"
 
         if limit:
-            query += f" LIMIT {limit}"
+            query += f"\nLIMIT {limit}"
 
         logging.info(f"⏳ Execution de la requête: {query} ...")
 
@@ -190,22 +190,23 @@ class PostgresWarehouse():
 
         logging.info(f"✅ Requête exécutée avec succès, {len(df)} lignes extraites.")
 
-        manager.Marquez.event(
-            event_type="COMPLETE",
-            run_id=kwargs['run_id'],
-            event_time=kwargs['logical_date'].in_timezone("Europe/Paris").isoformat(),
-            job_namespace=kwargs['dag'].dag_id,
-            job_name=kwargs['task'].task_id,
+        # Mettre à jour les métadonnées Marquez
+        kwargs.get('marquez').set_metadata_sql(
             inputs=[
-                manager.Marquez.build_dataset(
-                    namespace=kwargs['dag'].dag_id,
+                kwargs.get('marquez').build_dataset(
+                    namespace=f"warehouse://{schema}",
                     name=table_name,
                     fields=[{"name": col, "type": str(df[col].dtype)} for col in df.columns]
                 )
             ],
-            outputs=[],
-            description=f"Extraction des données depuis la table {schema}.{table_name}",
-            query=query
+            outputs=[
+                kwargs.get('marquez').build_dataset(
+                    namespace=f"xcom://{kwargs['dag'].dag_id}/{kwargs['task_instance'].task_id}",
+                    name=f"xcom.{kwargs['task_instance'].task_id}",
+                    fields=[{"name": col, "type": str(df[col].dtype)} for col in df.columns]
+                )
+            ],
+            query=query,
         )
 
         return manager.Xcom.put(
@@ -256,6 +257,7 @@ class PostgresWarehouse():
         )
 
     @customTask
+    @marquezTask(description="Insertion des données dans le Data Warehouse")
     @staticmethod
     def insert(
         xcom_source : str,
@@ -321,6 +323,25 @@ class PostgresWarehouse():
         except Exception as e:
             logging.error(f"❌ Erreur lors de l'insertion dans le Data Warehouse: {e}")
             raise
+
+        # Mettre à jour les métadonnées Marquez
+        kwargs.get('marquez').set_metadata_sql(
+            inputs=[
+                kwargs.get('marquez').build_dataset(
+                    namespace=f"xcom://{kwargs['dag'].dag_id}/{xcom_source}",
+                    name=f"xcom.{xcom_source}",
+                    fields=[{"name": col, "type": str(df[col].dtype)} for col in df.columns]
+                )
+            ],
+            outputs=[
+                kwargs.get('marquez').build_dataset(
+                    namespace=f"warehouse://{schema}",
+                    name=table_name,
+                    fields=[{"name": col, "type": str(df[col].dtype)} for col in df.columns]
+                )
+            ],
+            query=f"INSERT INTO {schema}.{table_name} VALUES (...)",
+        )
 
         logging.info(f"✅ Insertion terminée avec succès dans la table '{schema}.{table_name}'")
 

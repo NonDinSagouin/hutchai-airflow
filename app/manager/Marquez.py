@@ -1,21 +1,70 @@
+from importlib.metadata import metadata
 import requests
 import json
 import logging
 import os
+
+from datetime import datetime, timezone
+from enum import Enum
+from airflow.exceptions import AirflowFailException
+
+class MarquezEventType(Enum):
+    START = "START"
+    COMPLETE = "COMPLETE"
+    FAIL = "FAIL"
 
 class Marquez:
 
     URL = os.getenv("MARQUEZ_URL", "http://marquez:5000")
     HEADERS = {'Content-Type': 'application/json'}
 
-    PRODUCER = "hutchai-airflow"
-    SCHEMA_URL = "https://openlineage.io/spec/facets/1-1-1/SchemaDatasetFacet.json"
+    PRODUCER = "https://github.com/OpenLineage/OpenLineage/tree/0.10.0/integration/airflow"
+    SCHEMA_URL = "https://raw.githubusercontent.com/OpenLineage/OpenLineage/main/spec/OpenLineage.json#/definitions/SchemaDatasetFacet"
+    DATASOURCE_URL = "https://raw.githubusercontent.com/OpenLineage/OpenLineage/main/spec/OpenLineage.json#/definitions/DataSourceDatasetFacet"
 
-    @staticmethod
+    def __init__(
+        self,
+        run_id : str,
+        job_namespace : str,
+        job_name : str,
+        description : str = "",
+    ):
+        """ Initialise une instance Marquez pour un job spécifique
+
+        Args:
+            run_id (str): Identifiant unique de l'exécution du job
+            job_namespace (str): Namespace du job
+            job_name (str): Nom du job
+            description (str): Description du job
+
+        Returns:
+            None
+
+        Example:
+            >>> marquez = Marquez(
+            ...    run_id="123e4567-e89b-12d3-a456-426614174000",
+            ...    job_namespace="hutchai_lol",
+            ...    job_name="ZZZ_lol_enrich_fact_matchs",
+            ...    description="Job d'enrichissement des faits de matchs LOL"
+            ... )
+            Initialise une instance Marquez pour le job spécifié.
+        """
+        self.__run_id = run_id
+        self.__job_namespace = job_namespace
+        self.__job_name = job_name
+        self.__description = description
+
+        # Initialiser les appels SQL (si nécessaire)
+        self.__query = ""
+        self.__inputs = []
+        self.__outputs = []
+
     def __send(
+        self,
         event : dict
     ) -> bool:
         """ Envoie un événement OpenLineage à Marquez """
+        print(json.dumps(event, indent=4))
         try:
             logging.info("🚀 Envoi de l'événement OpenLineage à Marquez...")
             response = requests.post(
@@ -34,79 +83,112 @@ class Marquez:
         except requests.exceptions.RequestException as e:
             logging.error(f"❌ Exception lors de l'envoi de l'événement: {e}")
             return False
-        
-    @staticmethod
-    def event(
-        event_type : str,
-        run_id : str,
-        event_time : str,
-        job_namespace : str,
-        job_name : str,
+
+    def set_metadata_sql(
+        self, 
+        query : str,
         inputs : list,
         outputs : list,
-        query : str = "",
-        description : str = "",
+    ):
+        """ Met à jour les métadonnées de l'événement
+
+        Args:
+            query (str): Requête SQL associée au job
+            inputs (dict): Dictionnaire représentant les datasets d'entrée
+            outputs (dict): Dictionnaire représentant les datasets de sortie
+
+        Example:
+            >>> marquez.set_metadata_sql(
+            ...    query="SELECT puuid, status FROM lol_fact_puuid_to_process WHERE status = 'pending'",
+            ...    inputs=[
+            ...        marquez.build_dataset(
+            ...            namespace="hutchai_lol",
+            ...            name="lol_fact_puuid_to_process",
+            ...            fields=[
+            ...                {"name": "puuid", "type": "VARCHAR"},
+            ...                {"name": "status", "type": "VARCHAR"},
+            ...            ]
+            ...        )
+            ...    ],
+            ...    outputs=[
+            ...        marquez.build_dataset(
+            ...            namespace="hutchai_lol",
+            ...            name="ZZZ_lol_fact_datas.lol_fact_match",
+            ...            fields=[
+            ...                {"name": "puuid", "type": "VARCHAR"},
+            ...                {"name": "status", "type": "VARCHAR"},
+            ...            ]
+            ...        )
+            ...    ]
+            ... )
+            Met à jour les métadonnées de l'événement avec les informations spécifiées.
+        """
+        self.__query = query
+        self.__inputs = inputs
+        self.__outputs = outputs  
+
+    def event(
+        self,
+        event_type : MarquezEventType,
+        event_time : str = None,
     ) -> bool:
-        """ Génère un événement OpenLineage 
+        """ Génère et envoie un événement OpenLineage à Marquez
 
         Args:
             event_type (str): Type d'événement (START, COMPLETE, FAIL)
-            run_id (str): Identifiant unique de l'exécution
-            job_namespace (str): Namespace du job
-            job_name (str): Nom du job
-            inputs (list): Liste des datasets d'entrée
-            outputs (list): Liste des datasets de sortie
-            query (str): Requête SQL associée au job
-            description (str): Description du job
+            event_time (str): Timestamp de l'événement au format ISO 8601. Si None, utilise l'heure actuelle.
 
         Returns:
             bool: True si l'événement a été envoyé avec succès, False sinon
         
         Example:
             >>> event = Marquez.generate_event(
-            ...    event_type="COMPLETE",
-            ...    run_id="123e4567-e89b-12d3-a456-426614174000",
-            ...    job_namespace="hutchai_lol",
-            ...    job_name="ZZZ_lol_enrich_fact_matchs",
-            ...    inputs=[input_dataset],
-            ...    outputs=[output_dataset],
+            ...    event_type="START",
+            ...    event_time="2024-10-01T12:00:00Z",
             ... )
-            Retourne un dictionnaire représentant l'événement OpenLineage.
+            Retourne true si l'envoi a réussi, false sinon.
         """
-        if event_type not in ["START", "COMPLETE", "FAIL"]:
-            raise ValueError("event_type must be one of: START, COMPLETE, FAIL")
+        if event_type not in MarquezEventType:
+            raise AirflowFailException(f"Type d'événement invalide: {event_type}. Doit être l'un de {[e.value for e in MarquezEventType]}")
+
+        if event_time is None:
+            event_time = datetime.now(timezone.utc).isoformat()
+
+        # Construction des facets du job
+        job_facets = {
+            "documentation": {
+                "_producer": self.PRODUCER,
+                "_schemaURL": self.SCHEMA_URL,
+                "description": self.__description,
+            }
+        }
+
+        job_facets["sql"] = {
+            "_producer": self.PRODUCER,
+            "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/SqlJobFacet.json",
+            "query": self.__query
+        }
 
         event = {
-            "eventType": event_type,
+            "eventType": event_type.value,
             "eventTime": event_time,
             "run": {
-                "runId": run_id
+                "runId": self.__run_id
             },
             "job": {
-                "namespace": job_namespace,
-                "name": job_name,
-                "facets": {
-                    "documentation": {
-                        "_producer": Marquez.PRODUCER,
-                        "_schemaURL": Marquez.SCHEMA_URL,
-                        "description": description,
-                    },
-                    "sql": {
-                        "_producer": Marquez.PRODUCER,
-                        "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/SqlJobFacet.json",
-                        "query": query
-                    }
-                }
+                "namespace": self.__job_namespace,
+                "name": self.__job_name,
+                "facets": job_facets
             },
-            "inputs": inputs,
-            "outputs": outputs,
-            "producer": Marquez.PRODUCER
+            "inputs": self.__inputs,
+            "outputs": self.__outputs,
+            "producer": self.PRODUCER
         }
     
-        return Marquez.__send(event)
+        return self.__send(event)
     
-    @staticmethod
     def build_dataset(
+        self,
         namespace : str,
         name : str,
         fields : dict
@@ -136,6 +218,12 @@ class Marquez:
             "namespace": namespace,
             "name": name,
             "facets": {
+                "dataSource": {
+                    "_producer": Marquez.PRODUCER,
+                    "_schemaURL": Marquez.DATASOURCE_URL,
+                    "name": namespace,
+                    "uri": f"warehouse://{namespace}"
+                },
                 "schema": {
                     "_producer": Marquez.PRODUCER,
                     "_schemaURL": Marquez.SCHEMA_URL,

@@ -288,6 +288,7 @@ class Riotgames():
             raise AirflowSkipException("❌ Le PUUID n'a pas été trouvé dans la source XCom fournie.")
         
         matchs = []
+        total_calls = 0
 
         for puuid in lol_puuid['puuid']:
 
@@ -307,6 +308,7 @@ class Riotgames():
 
                 matches = Riotgames.__get_matches(puuid, start, count, queue)
                 nb_iterations += 1
+                total_calls += 1
 
                 if matches is None:
                     logging.warning("⚠️ Aucune donnée de match n'a été récupérée.")
@@ -322,12 +324,13 @@ class Riotgames():
 
             logging.info(f"✅ Récupération des identifiants de matchs réussie pour le PUUID: {puuid}. Nombre de matchs récupérés: {len(matchs)}")
 
-
         if not matchs:
             raise AirflowSkipException(f"⚠️ Aucun match n'a été récupéré pour le PUUID {puuid}.")
 
         df_matches = pd.DataFrame(matchs)
         df_matches.columns = ['match_id']
+        
+        logging.info(f"📈 Nombre total d'appels API effectués: {total_calls}")
         logging.info(f"✅ DataFrame des matchs créé avec {len(df_matches)} entrées.")
 
         return manager.Xcom.put(

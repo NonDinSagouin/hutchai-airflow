@@ -69,23 +69,23 @@ with DAG(
         skip_empty=True,
     )
 
-    # # Récupération des identifiants de matchs via l'API Riot Games
-    # fetch_matchs_by_puuid = api.Riotgames.fetch_matchs_by_puuid(
-    #     task_id = "fetch_matchs_by_puuid",
-    #     xcom_source="get_puuid",
-    #     queue=QUEUE_ARAM,
-    # )
+    # Récupération des identifiants de matchs via l'API Riot Games
+    fetch_matchs_by_puuid = api.Riotgames.fetch_matchs_by_puuid(
+        task_id = "fetch_matchs_by_puuid",
+        xcom_source="get_puuid",
+        queue=QUEUE_ARAM,
+    )
 
-    # # Insertion des données brutes dans la table d'entrepôt
-    # insert_raw_matchs = databases.PostgresWarehouse.insert(
-    #     task_id="insert_raw_matchs",
-    #     xcom_source="fetch_matchs_by_puuid",
-    #     engine=manager.Connectors.postgres("POSTGRES_warehouse"),
-    #     table_name="lol_raw_match_datas_ids",
-    #     schema="lol_raw_datas",
-    #     if_table_exists="replace",
-    #     add_technical_columns=True,
-    # )
+    # Insertion des données brutes dans la table d'entrepôt
+    insert_raw_matchs = databases.PostgresWarehouse.insert(
+        task_id="insert_raw_matchs",
+        xcom_source="fetch_matchs_by_puuid",
+        engine=manager.Connectors.postgres("POSTGRES_warehouse"),
+        table_name="lol_raw_match_datas_ids",
+        schema="lol_raw_datas",
+        if_table_exists="replace",
+        add_technical_columns=True,
+    )
 
     # # Transformation des données brutes en données factuelles
     # raw_to_fact_matchs = databases.PostgresWarehouse.raw_to_fact(
@@ -116,11 +116,11 @@ with DAG(
     #     },
     # )
 
-    # # Définition de l'ordre d'exécution des tâches
-    # chain(
-    #     get_puuid,
-    #     fetch_matchs_by_puuid,
-    #     insert_raw_matchs,
-    #     raw_to_fact_matchs,
-    #     update_puuid_status,
-    # )
+    # Définition de l'ordre d'exécution des tâches
+    chain(
+        get_puuid,
+        fetch_matchs_by_puuid,
+        insert_raw_matchs,
+        # raw_to_fact_matchs,
+        # update_puuid_status,
+    )
