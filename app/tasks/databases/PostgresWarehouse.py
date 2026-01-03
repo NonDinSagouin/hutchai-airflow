@@ -13,7 +13,7 @@ from airflow.exceptions import AirflowFailException, AirflowSkipException
 import app.helper as helper
 import app.manager as manager
 
-from app.tasks.decorateurs import customTask, marquezTask
+from app.tasks.decorateurs import customTask
 
 class PostgresWarehouse():
 
@@ -107,7 +107,6 @@ class PostgresWarehouse():
         return execution_date
 
     @customTask
-    @marquezTask(description="Extraction des données depuis le Data Warehouse")
     @staticmethod
     def extract(
         engine: Engine,
@@ -190,25 +189,6 @@ class PostgresWarehouse():
 
         logging.info(f"✅ Requête exécutée avec succès, {len(df)} lignes extraites.")
 
-        # Mettre à jour les métadonnées Marquez
-        kwargs.get('marquez').set_metadata_sql(
-            inputs=[
-                kwargs.get('marquez').build_dataset(
-                    namespace=f"warehouse://{schema}",
-                    name=table_name,
-                    fields=[{"name": col, "type": str(df[col].dtype)} for col in df.columns]
-                )
-            ],
-            outputs=[
-                kwargs.get('marquez').build_dataset(
-                    namespace=f"xcom://{kwargs['dag'].dag_id}/{kwargs['task_instance'].task_id}",
-                    name=f"xcom.{kwargs['task_instance'].task_id}",
-                    fields=[{"name": col, "type": str(df[col].dtype)} for col in df.columns]
-                )
-            ],
-            query=query,
-        )
-
         return manager.Xcom.put(
             input=df,
             **kwargs
@@ -257,7 +237,6 @@ class PostgresWarehouse():
         )
 
     @customTask
-    @marquezTask(description="Insertion des données dans le Data Warehouse")
     @staticmethod
     def insert(
         xcom_source : str,
@@ -321,27 +300,7 @@ class PostgresWarehouse():
             df.to_sql(name=table_name, schema=schema ,con=engine, if_exists=if_table_exists, index=False, chunksize=chunksize, method=method,)
 
         except Exception as e:
-            logging.error(f"❌ Erreur lors de l'insertion dans le Data Warehouse: {e}")
-            raise
-
-        # Mettre à jour les métadonnées Marquez
-        kwargs.get('marquez').set_metadata_sql(
-            inputs=[
-                kwargs.get('marquez').build_dataset(
-                    namespace=f"xcom://{kwargs['dag'].dag_id}/{xcom_source}",
-                    name=f"xcom.{xcom_source}",
-                    fields=[{"name": col, "type": str(df[col].dtype)} for col in df.columns]
-                )
-            ],
-            outputs=[
-                kwargs.get('marquez').build_dataset(
-                    namespace=f"warehouse://{schema}",
-                    name=table_name,
-                    fields=[{"name": col, "type": str(df[col].dtype)} for col in df.columns]
-                )
-            ],
-            query=f"INSERT INTO {schema}.{table_name} VALUES (...)",
-        )
+            raise AirflowFailException(f"❌ Erreur lors de l'insertion dans le Data Warehouse: {e}") from e
 
         logging.info(f"✅ Insertion terminée avec succès dans la table '{schema}.{table_name}'")
 
