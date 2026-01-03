@@ -1,6 +1,8 @@
 import logging
 import hashlib
 
+from typing import Any
+
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.exceptions import AirflowFailException
 from airflow.sdk.bases.hook import BaseHook
@@ -14,7 +16,7 @@ from app.helper import logging_title
 class Connectors:
 
     # Cache pour les connexions
-    _connection_cache: dict = {}
+    _connection_cache: dict[str, Any] = {}
 
     @staticmethod
     def clear_cache():
@@ -34,15 +36,10 @@ class Connectors:
 
         Example:
             >>> Connectors.__generate_cache_key("http", conn_id="my_conn")
-            '5d41402abc4b2a76b9719d911017c592'
+            'a1b2c3d4e5f6g7h8i9j0...'
         """
-        # Créer une chaîne unique avec tous les paramètres
-        params_str = f"{method_name}"
-        for key, value in sorted(kwargs.items()):
-            params_str += f"_{key}_{value}"
-
-        # Utiliser un hash pour avoir une clé de taille fixe
-        return hashlib.md5(params_str.encode()).hexdigest()
+        params_str = f"{method_name}" + "".join(f"_{k}_{v}" for k, v in sorted(kwargs.items()))
+        return hashlib.sha256(params_str.encode()).hexdigest()
 
     @staticmethod
     def http(

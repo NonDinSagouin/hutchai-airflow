@@ -18,19 +18,34 @@ def call_api(
         
     Returns:
         Any: Données JSON récupérées depuis l'API.
+
+    Examples:
+        >>> call_api(
+        ...     url="https://api.example.com/data",
+        ...     headers={"Authorization": "Bearer token"},
+        ...     raise_on_error=True
+        ... )
+        ✅ Données récupérées avec succès: 100 éléments.
+        [{'id': 1, 'value': 'A'}, {'id': 2, 'value': 'B'}, ...]
     """
     
+    logging.info(f"⏳ Appel de l'API: {url} ...")
+
     try:    
         response = requests.get(url, headers=headers)
         
-        if raise_on_error:
-            response.raise_for_status()
+        if raise_on_error: response.raise_for_status()
         elif response.status_code != 200:
             logging.warning(f"⚠️ Status code non-200: {response.status_code}")
             return None
 
-        data = response.json()
-        logging.info(f"✅ Données récupérées avec succès: {len(data)} éléments.")
+        try: data = response.json()
+        except ValueError:
+            if raise_on_error:
+                raise AirflowFailException("❌ La réponse n'est pas au format JSON.")
+            else:
+                logging.error("❌ La réponse n'est pas au format JSON.")
+                return None
 
     except requests.exceptions.RequestException as e:
         
@@ -40,4 +55,5 @@ def call_api(
             logging.error(f"❌ Erreur lors de l'appel API: {e}")
             return None
     
+    logging.info(f"✅ Données récupérées avec succès: {len(data)} éléments.")
     return data

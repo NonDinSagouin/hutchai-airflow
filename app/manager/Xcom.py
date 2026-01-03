@@ -12,6 +12,9 @@ import app.helper as helper
 
 class Xcom:
 
+    SUPPORTED_STRATEGIES = ['direct', 'file']
+    SUPPORTED_FORMATS = ['json', 'parquet']
+
     @staticmethod
     def get(
         xcom_source : str,
@@ -36,61 +39,26 @@ class Xcom:
             >>> print(data.head())
                 col1  col2
         """
+        helper.logging_title("Récupération des données depuis XCom", lvl=3)
 
         if not xcom_source:
             raise AirflowFailException("❌ Le paramètre 'xcom_source' est obligatoire pour récupérer les données depuis XCom.")
-        if 'ti' not in context:
-            raise AirflowFailException("TaskInstance manquante dans le contexte")
 
-        helper.logging_title("Récupération des données depuis XCom", lvl=3)
-
-        ti = context.get('ti')
-        if not ti:
-            raise AirflowFailException("❌ TaskInstance introuvable dans le contexte")
+        ti = Xcom.__get_context(context)
         data = ti.xcom_pull(task_ids=xcom_source)
 
-        # Si c'est un chemin de fichier, le charger
-        if isinstance(data, str) and os.path.isfile(data):
-            logging.info(f"⏳ Chargement du fichier depuis XCom: {data}")
-
-            # Déterminer le format selon l'extension
-            if data.endswith('.parquet'):
-                try:
-                    data = pd.read_parquet(data)
-                except Exception as e:
-                    raise AirflowFailException(f"❌ Erreur lecture parquet: {str(e)}")
-
-                logging.info(f"✅ Fichier parquet chargé avec succès")
-
-            elif data.endswith('.json'):
-                try:
-                    with open(data, 'r') as f: data = json.load(f)
-                except Exception as e:
-                    raise AirflowFailException(f"❌ Erreur lecture JSON: {str(e)}")
-
-                logging.info(f"✅ Fichier JSON chargé avec succès")
-
-            else:
-                raise AirflowFailException(f"❌ Format de fichier non supporté")
-
         if data is None:
-            raise AirflowFailException(f"❌ Aucune donnée trouvée dans XCom pour la tâche '{xcom_source}'.")
+            raise AirflowFailException(f"❌ Aucune donnée trouvée pour '{xcom_source}'")
 
-        if isinstance(data, pd.DataFrame):
-            helper.logging_title(f"✅ DataFrame récupéré depuis XCom avec {data.shape[0]} lignes et {data.shape[1]} colonnes.", lvl=3, close=True)
+        processed_data = Xcom.__process_data(data)
+        Xcom.__log_result(processed_data)
 
-        elif isinstance(data, dict):
-            helper.logging_title(f"✅ Dict récupéré depuis XCom avec {len(data)} clés.", lvl=3, close=True)
-
-        else:
-            helper.logging_title(f"✅ String récupéré depuis XCom avec {len(data)} caractères.", lvl=3, close=True)
-
-        return data
+        return processed_data
 
     @staticmethod
     def put(
         input: str | pd.DataFrame | dict,
-        xcom_strategy: str = 'auto',
+        xcom_strategy: str = 'file',
         file_format: str = 'parquet',
         **context
     ) -> str | pd.DataFrame | dict:
@@ -98,7 +66,7 @@ class Xcom:
 
         Args:
             input (str | pd.DataFrame | dict): Données à stocker dans XCom
-            xcom_strategy (str, optionnel): Stratégie de stockage ('direct', 'file', 'auto'). Par défaut à 'auto'.
+            xcom_strategy (str, optionnel): Stratégie de stockage ('direct', 'file'). Par défaut à 'file'.
             file_format (str, optionnel): Format de fichier si stratégie 'file' ('json' ou 'parquet'). Par défaut à 'parquet'.
             **context: Contexte Airflow contenant TaskInstance
 
@@ -108,53 +76,40 @@ class Xcom:
         Examples:
             >>> filepath = Xcom.put(
             ...     input=large_dataframe,
-            ...     xcom_strategy='auto',
+            ...     xcom_strategy='file',
             ...     file_format='parquet',
             ...     **context
             ... )
-            # Si le DataFrame est volumineux, il sera sauvegardé dans un fichier et le chemin sera retourné.
+            # Le DataFrame est sauvegardé dans un fichier Parquet et le chemin est retourné.
             >>> print(filepath)
             /tmp/airflow_data/task_123_20240601_153045_123456.parquet
         """
 
-        if xcom_strategy not in ['direct', 'file', 'auto']:
-            raise AirflowFailException("❌ Le paramètre 'xcom_strategy' doit être 'direct', 'file' ou 'auto'.")
+        helper.logging_title(f"Préparation des données pour XCom. Format: {file_format}, Stratégie: {xcom_strategy}", lvl=3)
 
-        if file_format not in ['json', 'parquet']:
+        if xcom_strategy not in Xcom.SUPPORTED_STRATEGIES:
+            raise AirflowFailException("❌ Le paramètre 'xcom_strategy' doit être 'direct' ou 'file'.")
+
+        if file_format not in Xcom.SUPPORTED_FORMATS:
             raise AirflowFailException("❌ Le paramètre 'file_format' doit être 'json' ou 'parquet'.")
 
-        if 'ti' not in context:
-            raise AirflowFailException("TaskInstance manquante dans le contexte")
+        ti = Xcom.__get_context(context)
 
-        ti = context.get('ti')
-        if not ti:
-            raise AirflowFailException("❌ TaskInstance introuvable dans le contexte")
-
-        helper.logging_title("Préparation des données pour XCom", lvl=3)
         tmp_folder = Variable.get("Folder_tmp_data", default="/tmp/airflow_data")
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
         output = None
-
-        # Stratégie adaptative selon la taille
-        if xcom_strategy == 'auto':
-            # Si c'est un DataFrame et > 100KB, utiliser fichier
-            if isinstance(input, pd.DataFrame) and input.memory_usage(deep=True).sum() > 100 * 1024:
-                xcom_strategy = 'file'
-            # Si c'est un dict ou string volumineux, utiliser fichier
-            elif isinstance(input, (dict, str)) and len(str(input)) > 100 * 1024:
-                xcom_strategy = 'file'
-            else:
-                xcom_strategy = 'direct'
-
-        logging.info(f"ℹ️ Stratégie XCom utilisée: {xcom_strategy}")
 
         if xcom_strategy == 'file':
 
             task_id = ti.task_id
 
             # Déterminer l'extension selon le format et le type de données
-            if file_format == 'json': output = Xcom.__file_strategy_json(input, tmp_folder, task_id, timestamp)
-            else: output = Xcom.__file_strategy_parquet(input, tmp_folder, task_id, timestamp)
+            if file_format == 'json':
+                output = Xcom.__file_strategy_json(input, tmp_folder, task_id, timestamp)
+            elif file_format == 'parquet':
+                output = Xcom.__file_strategy_parquet(input, tmp_folder, task_id, timestamp)
+            else:
+                raise AirflowFailException("❌ Format de fichier non supporté pour la stratégie 'file'.")
 
             logging.info(f"✅ Données sauvegardées dans: {output}")
 
@@ -162,9 +117,17 @@ class Xcom:
             logging.info("✅ Données prêtes pour stockage direct dans XCom")
             output = input
 
-        Xcom.clean_tmp_files(tmp_folder=tmp_folder, older_than_minutes=60)
+        Xcom.__clean_tmp_files(tmp_folder=tmp_folder, older_than_minutes=60)
         helper.logging_title("✅ Données préparées pour XCom.", lvl=3, close=True)
         return output
+
+    @classmethod
+    def __get_context(cls, context: dict) -> any:
+        """Validation centralisée du contexte Airflow"""
+        if 'ti' not in context:
+            raise AirflowFailException("TaskInstance manquante dans le contexte")
+        
+        return context.get('ti')
 
     @staticmethod
     def __file_strategy_json(
@@ -184,22 +147,31 @@ class Xcom:
         Returns:
             str: Chemin du fichier sauvegardé
         """
-        filepath = f"{tmp_folder}/{task_id}_{timestamp}.json"
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        try:
+            filepath = f"{tmp_folder}/{task_id}_{timestamp}.json"
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        except Exception as e:
+            raise AirflowFailException(f"❌ Erreur création dossier temporaire: {str(e)}") from e
 
         if isinstance(input, pd.DataFrame):
-            logging.info("⏳ Sauvegarde du DataFrame en JSON")
-            input.to_json(filepath, orient='records', index=False)
+            try:
+                input.to_json(filepath, orient='records', index=False)
+            except Exception as e:
+                raise AirflowFailException(f"❌ Erreur sauvegarde DataFrame en JSON: {str(e)}") from e
 
         elif isinstance(input, dict):
-            logging.info("⏳ Sauvegarde du dict en JSON")
-            with open(filepath, 'w', encoding='utf-8') as f: json.dump(input, f, ensure_ascii=False, indent=2)
+            try:
+                with open(filepath, 'w', encoding='utf-8') as f: json.dump(input, f, ensure_ascii=False, indent=2)
+            except Exception as e:
+                raise AirflowFailException(f"❌ Erreur sauvegarde dict en JSON: {str(e)}") from e
 
         else:
-            logging.info("⏳ Sauvegarde du string en JSON")
-            with open(filepath, 'w', encoding='utf-8') as f: f.write(str(input))
+            try:
+                with open(filepath, 'w', encoding='utf-8') as f: f.write(str(input))
+            except Exception as e:
+                raise AirflowFailException(f"❌ Erreur sauvegarde string en JSON: {str(e)}") from e
 
-        logging.info(f"💾 Fichier JSON sauvegardé avec succès")
+        logging.info("💾 Fichier JSON sauvegardé avec succès")
         return filepath
 
     @staticmethod
@@ -230,7 +202,75 @@ class Xcom:
         return filepath
 
     @staticmethod
-    def clean_tmp_files(
+    def __log_result(
+        result: str | pd.DataFrame | dict
+    ):
+        """ Log le résultat selon son type.
+
+        Args:
+            result (str | pd.DataFrame | dict): Résultat à logger
+        """
+
+        if isinstance(result, pd.DataFrame):
+            helper.logging_title(f"✅ DataFrame avec {result.shape[0]} lignes et {result.shape[1]} colonnes.", lvl=3, close=True)
+
+        elif isinstance(result, dict):
+            helper.logging_title(f"✅ Dict avec {len(result)} clés.", lvl=3, close=True)
+
+        elif isinstance(result, str):
+            helper.logging_title(f"✅ String avec {len(result)} caractères.", lvl=3, close=True)
+
+        else:
+            raise AirflowFailException(f"❌ Type de données non supporté pour le logging: {type(result)}")
+
+    @staticmethod
+    def __process_data(
+        data: str | pd.DataFrame | dict
+    ) -> pd.DataFrame | dict | str:
+        """ Traite les données récupérées depuis XCom.
+
+        Args:
+            data (str | pd.DataFrame | dict): Données récupérées depuis XCom
+
+        Returns:
+            pd.DataFrame | dict | str: Données traitées
+        """
+
+        SUCCESS_LOG = "✅ Données récupérées et traitées depuis XCom."
+
+        # Si c'est un chemin de fichier, le charger
+        if isinstance(data, str) and os.path.isfile(data):
+            logging.info(f"⏳ Chargement du fichier depuis XCom: {data}")
+
+            # Déterminer le format selon l'extension
+            if data.endswith('.parquet'):
+                try:
+                    data = pd.read_parquet(data)
+                except Exception as e:
+                    raise AirflowFailException(f"❌ Erreur lecture parquet: {str(e)}")
+
+                logging.info(SUCCESS_LOG)
+
+            elif data.endswith('.json'):
+                try:
+                    with open(data, 'r') as f: data = json.load(f)
+                except Exception as e:
+                    raise AirflowFailException(f"❌ Erreur lecture JSON: {str(e)}")
+
+                logging.info(SUCCESS_LOG)
+
+            else:
+                raise AirflowFailException("❌ Format de fichier non supporté")
+
+        if data is None:
+            raise AirflowFailException("❌ Aucune donnée trouvée dans XCom source.")
+        
+        logging.info(SUCCESS_LOG)
+        
+        return data
+
+    @staticmethod
+    def __clean_tmp_files(
         tmp_folder: str,
         older_than_minutes: int = 60
     ):
@@ -244,6 +284,10 @@ class Xcom:
         now = datetime.now()
         cutoff = now.timestamp() - (older_than_minutes * 60)
         deleted_count = 0
+
+        if not os.path.exists(tmp_folder):
+            logging.info(f"✅ Nettoyage terminé: le dossier temporaire '{tmp_folder}' n'existe pas.")
+            return
 
         for filename in os.listdir(tmp_folder):
             filepath = os.path.join(tmp_folder, filename)

@@ -87,40 +87,40 @@ with DAG(
         add_technical_columns=True,
     )
 
-    # # Transformation des données brutes en données factuelles
-    # raw_to_fact_matchs = databases.PostgresWarehouse.raw_to_fact(
-    #     task_id="raw_to_fact",
-    #     outlets=[Asset('warehouse://lol_fact_datas/lol_fact_match')],
-    #     source_table="lol_raw_datas.lol_raw_match_datas_ids",
-    #     target_table="lol_fact_datas.lol_fact_match",
-    #     engine=manager.Connectors.postgres("POSTGRES_warehouse"),
-    #     has_not_matched=True,
-    #     has_matched=False,
-    #     join_keys=["match_id"],
-    #     non_match_columns={
-    #         "match_id": "match_id",
-    #     },
-    # )
+    # Transformation des données brutes en données factuelles
+    raw_to_fact_matchs = databases.PostgresWarehouse.raw_to_fact(
+        task_id="raw_to_fact",
+        outlets=[Asset('warehouse://lol_fact_datas/lol_fact_match')],
+        source_table="lol_raw_datas.lol_raw_match_datas_ids",
+        target_table="lol_fact_datas.lol_fact_match",
+        engine=manager.Connectors.postgres("POSTGRES_warehouse"),
+        has_not_matched=True,
+        has_matched=False,
+        join_keys=["match_id"],
+        non_match_columns={
+            "match_id": "match_id",
+        },
+    )
 
-    # # Mise à jour de la date de traitement des PUUIDs
-    # update_puuid_status = databases.PostgresWarehouse.update(
-    #     task_id="update_puuid_status",
-    #     engine=manager.Connectors.postgres("POSTGRES_warehouse"),
-    #     table_name="lol_fact_puuid_to_process",
-    #     schema="lol_fact_datas",
-    #     set_values={
-    #         "date_processed": "CURRENT_TIMESTAMP",
-    #     },
-    #     where_conditions={
-    #         "puuid": "(select puuid from lol_raw_datas.lol_raw_match_datas_ids)",
-    #     },
-    # )
+    # Mise à jour de la date de traitement des PUUIDs
+    update_puuid_status = databases.PostgresWarehouse.update(
+        task_id="update_puuid_status",
+        engine=manager.Connectors.postgres("POSTGRES_warehouse"),
+        table_name="lol_fact_puuid_to_process",
+        schema="lol_fact_datas",
+        set_values={
+            "date_processed": "CURRENT_TIMESTAMP",
+        },
+        where_conditions={
+            "puuid": "(select puuid from lol_raw_datas.lol_raw_match_datas_ids)",
+        },
+    )
 
     # Définition de l'ordre d'exécution des tâches
     chain(
         get_puuid,
         fetch_matchs_by_puuid,
         insert_raw_matchs,
-        # raw_to_fact_matchs,
-        # update_puuid_status,
+        raw_to_fact_matchs,
+        update_puuid_status,
     )
