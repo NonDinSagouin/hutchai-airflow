@@ -126,7 +126,7 @@ class Xcom:
         """Validation centralisée du contexte Airflow"""
         if 'ti' not in context:
             raise AirflowFailException("TaskInstance manquante dans le contexte")
-        
+
         return context.get('ti')
 
     @staticmethod
@@ -196,9 +196,14 @@ class Xcom:
         logging.info("⏳ Sauvegarde du DataFrame en Parquet")
         filepath = f"{tmp_folder}/{task_id}_{timestamp}.parquet"
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
+
+        # Vérifier que l'input est bien un DataFrame
+        if not isinstance(input, pd.DataFrame):
+            raise AirflowFailException(f"❌ Le format Parquet ne supporte que les DataFrames. Type reçu: {type(input)}")
+
         input.to_parquet(filepath, index=False)
 
-        logging.info(f"💾 Fichier Parquet sauvegardé avec succès")
+        logging.info("💾 Fichier Parquet sauvegardé avec succès")
         return filepath
 
     @staticmethod
@@ -264,9 +269,9 @@ class Xcom:
 
         if data is None:
             raise AirflowFailException("❌ Aucune donnée trouvée dans XCom source.")
-        
+
         logging.info(SUCCESS_LOG)
-        
+
         return data
 
     @staticmethod

@@ -67,7 +67,7 @@ with DAG(
             "is_processed": "is false",
         },
         schema_order="tech_date_creation ASC",
-        limit=200,
+        limit=100,
         skip_empty=True,
     )
 
@@ -149,7 +149,7 @@ with DAG(
                 'champ_experience': 'champ_experience',
             },
         )
-        
+
         chain(
             extract_stats,
             drop_duplicates_stats,

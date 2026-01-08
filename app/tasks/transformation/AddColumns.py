@@ -26,7 +26,7 @@ class AddColumns():
             execution_date = pendulum.parse(kwargs['ds']).in_timezone(AddColumns.PARIS_TZ)
         else:
             raise KeyError("❌ Aucune date d'exécution trouvée dans le contexte (logical_date, execution_date, ds)")
-        
+
         logging.debug(f"📅 Date d'exécution récupérée : {execution_date}")
         return execution_date
 
@@ -37,7 +37,7 @@ class AddColumns():
         dag_id_column: str = "tech_dag_id",
         execution_date_column: str = "tech_execution_date",
         date_format: str = "%Y-%m-%d %H:%M:%S",
-        xcom_strategy: str = 'auto',
+        xcom_strategy: str = 'file',
         file_format: str = 'parquet',
         **kwargs
     ) -> pd.DataFrame | dict | str:
@@ -48,7 +48,7 @@ class AddColumns():
             dag_id_column (str, optional): Nom de la colonne pour l'ID du DAG. Defaults to "tech_dag_id".
             execution_date_column (str, optional): Nom de la colonne pour la date d'exécution. Defaults to "tech_execution_date".
             date_format (str, optional): Format de la date d'exécution. Defaults to "%Y-%m-%d %H:%M:%S".
-            xcom_strategy (str, optional): Stratégie de stockage XCom ('auto', 'direct', 'file'). Defaults to 'auto'.
+            xcom_strategy (str, optional): Stratégie de stockage XCom ('direct', 'file'). Defaults to 'file'.
             file_format (str, optional): Format de fichier pour le stockage XCom ('json' ou 'parquet'). Defaults to 'parquet'.
 
         Returns:
@@ -68,7 +68,7 @@ class AddColumns():
 
         if 'dag' not in kwargs:
             raise KeyError("❌ 'dag' absent du contexte Airflow")
-        
+
         data = manager.Xcom.get(xcom_source, **kwargs)
 
         if not isinstance(data, pd.DataFrame):
@@ -76,14 +76,14 @@ class AddColumns():
 
         # Copie pour éviter les effets de bord
         df_xcom = data.copy()
-        
+
         execution_date = AddColumns.__get_execution_date(**kwargs)
-        
+
         df_xcom[dag_id_column] = kwargs['dag'].dag_id
         df_xcom[execution_date_column] = execution_date.strftime(date_format)
-        
+
         logging.info(f"✅ Colonnes '{dag_id_column}' et '{execution_date_column}' ajoutées.")
-        
+
         return manager.Xcom.put(
             input=df_xcom,
             xcom_strategy=xcom_strategy,
@@ -120,28 +120,28 @@ class AddColumns():
 
         # Récupération et validation
         data = manager.Xcom.get(xcom_source, **kwargs)
-        
+
         if not isinstance(data, pd.DataFrame):
             raise TypeError(f"❌ tech_photo nécessite un DataFrame, reçu: {type(data)}")
-        
+
         # Copie pour éviter les effets de bord
         df_xcom = data.copy()
-        
+
         execution_date = AddColumns.__get_execution_date(**kwargs)
-        
+
         # Calcul des valeurs ISO
         iso_year, iso_week, _ = execution_date.isocalendar()
-        
+
         # Ajout des colonnes
         df_xcom[date_column] = execution_date.strftime(date_format)
         df_xcom[year_column] = iso_year
         df_xcom[week_column] = iso_week
-        
+
         logging.info(
             f"✅ Colonnes '{date_column}', '{year_column}' et '{week_column}' ajoutées "
             f"(semaine {iso_week}/{iso_year})."
         )
-        
+
         return manager.Xcom.put(
             input=df_xcom,
             xcom_strategy=xcom_strategy,

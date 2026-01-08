@@ -144,11 +144,11 @@ class PostgresWarehouse():
             ... )
             Extrait les colonnes "id", "amount" et "date" de la table "sales_data" pour les enregistrements où la région est "North" et l'année est 2025.
         """
-        query = f"\n\r SELECT \n\r\t * \n\r FROM \n\r\t {schema}.{table_name} "
+        query = f"\nSELECT \n\t * \n\r FROM \n\t {schema}.{table_name} "
 
         if schema_select:
             select_columns = '\n\t, '.join(schema_select)
-            query = f"SELECT \n\t{select_columns} \nFROM \n\t{schema}.{table_name} "
+            query = f"\nSELECT \n\t{select_columns} \nFROM \n\t{schema}.{table_name} "
         if schema_where:
 
             where_conditions = []
@@ -156,12 +156,12 @@ class PostgresWarehouse():
             for col, val in schema_where.items():
                 # Si la valeur commence par "is" (is null, is not null, etc.), ne pas utiliser de paramètre
                 if isinstance(val, str) and val.lower().startswith('is '):
-                    where_conditions.append(f"{col} {val}")
+                    where_conditions.append(f"\n\t {col} {val}")
                 else:
                     # Sinon, utiliser un paramètre pour l'égalité
-                    where_conditions.append(f"{col} = :{col}")
+                    where_conditions.append(f"\n\t {col} = :{col}")
                     params[col] = val
-            
+
             if where_conditions:
                 query += "\nWHERE " + "\n\tAND ".join(where_conditions)
 

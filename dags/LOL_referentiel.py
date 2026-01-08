@@ -77,6 +77,47 @@ class Custom():
             **context
         )
 
+    @customTask
+    @staticmethod
+    def list_items(
+        xcom_source : str,
+        **context
+    ):
+        """ Crée une liste des items avec les informations demandées.
+
+        Args:
+            xcom_source (str): Source XCom contenant les données brutes des items.
+
+        Returns:
+            pd.DataFrame: DataFrame contenant la liste des items avec les informations demandées.
+        """
+
+        data_xcom = manager.Xcom.get(xcom_source=xcom_source, **context)
+        items_data = data_xcom["data"]
+
+        # Créer une liste des items avec les informations demandées
+        items_list = []
+        for item_id, item_info in items_data.items():
+            item = {
+                'id': item_id,
+                'name': item_info.get('name', ''),
+                'description': item_info.get('description', ''),
+                'plaintext': item_info.get('plaintext', ''),
+                'cost': item_info.get('gold', {}).get('total', 0),
+                'image_full': item_info.get('image', {}).get('full', ''),
+                'image_sprite': item_info.get('image', {}).get('sprite', ''),
+            }
+            items_list.append(item)
+
+        # Convertir la liste en DataFrame pandas
+        items_df = pd.DataFrame(items_list)
+
+        return manager.Xcom.put(
+            input=items_df,
+            xcom_strategy='file',
+            **context
+    )
+
     @staticmethod
     def get_ddragon_version() -> str:
         """ Récupère la dernière version de DDragon depuis l'API.
@@ -124,21 +165,49 @@ with DAG(
         task_id="task_get_champions_list",
     )
 
+    task_get_item_list = api.Providers.get(
+        conn_id="API_LOL_ddragon",
+        endpoint=f"/cdn/{Custom.get_ddragon_version()}/data/fr_FR/item.json",
+        to_dataframe=False,
+        xcom_strategy='file',
+        file_format='json',
+        task_id="task_get_item_list",
+    )
+
     task_list_champions = Custom.list_champions(
         task_id="task_list_champions",
         xcom_source="task_get_champions_list",
     )
 
-    task_add_tech_info = transformation.AddColumns.tech_info(
-        task_id="task_add_tech_info",
+    task_list_items = Custom.list_items(
+        task_id="task_list_items",
+        xcom_source="task_get_item_list",
+    )
+
+    task_add_tech_info_champions = transformation.AddColumns.tech_info(
+        task_id="task_add_tech_info_champions",
         xcom_source="task_list_champions",
+    )
+
+    task_add_tech_info_items = transformation.AddColumns.tech_info(
+        task_id="task_add_tech_info_items",
+        xcom_source="task_list_items",
     )
 
     task_insert_champions_list = databases.PostgresWarehouse.insert(
         task_id="task_insert_champions_list",
-        xcom_source="task_add_tech_info",
+        xcom_source="task_add_tech_info_champions",
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
         table_name="ref_champions",
+        schema="lol_referentiel",
+        if_table_exists="replace",
+    )
+
+    task_insert_items_list = databases.PostgresWarehouse.insert(
+        task_id="task_insert_items_list",
+        xcom_source="task_add_tech_info_items",
+        engine=manager.Connectors.postgres("POSTGRES_warehouse"),
+        table_name="ref_items",
         schema="lol_referentiel",
         if_table_exists="replace",
     )
@@ -146,6 +215,13 @@ with DAG(
     chain(
         task_get_champions_list,
         task_list_champions,
-        task_add_tech_info,
+        task_add_tech_info_champions,
         task_insert_champions_list,
+    )
+
+    chain(
+        task_get_item_list,
+        task_list_items,
+        task_add_tech_info_items,
+        task_insert_items_list,
     )

@@ -4,7 +4,7 @@
 
 setup-db: setup-schema setup_table_lol_fact_match setup_table_lol_fact_puuid setup_table_lol_fact_puuid_to_process setup-table-lol_fact_stats setup-data-puuid ## Initialise la base de données du warehouse avec les schémas et tables nécessaires
 	@echo "✅ Initialisation complète de la base de données du warehouse réussie !"
-	
+
 setup-schema:
 	@echo "🔨 Création du schéma lol_fact_datas dans le warehouse..."
 	@$(DE) $(WAREHOUSE) psql -U warehouse -d warehouse -c "\
@@ -106,7 +106,14 @@ setup-table-lol_fact_stats: ## Crée la table lol_fact_stats dans le warehouse
 			champ_level INTEGER, \
 			champ_experience INTEGER, \
 			tech_date_creation TIMESTAMP DEFAULT CURRENT_TIMESTAMP, \
-			tech_date_modification TIMESTAMP DEFAULT CURRENT_TIMESTAMP \
+			tech_date_modification TIMESTAMP DEFAULT CURRENT_TIMESTAMP, \
+			item0 INTEGER, \
+			item1 INTEGER, \
+			item2 INTEGER, \
+			item3 INTEGER, \
+			item4 INTEGER, \
+			item5 INTEGER, \
+			item6 INTEGER \
 		);" || { echo "❌ Échec de la création du schéma ou des tables"; exit 1; }
 
 setup-data-puuid: ## Insère des données initiales dans la table lol_fact_puuid_to_process

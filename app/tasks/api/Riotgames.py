@@ -119,7 +119,7 @@ class Riotgames():
             "game_in_progress": info.get('gameEndTimestamp') is None, # Indique si le match est en cours
             "is_processed": True,
         }
-        logging.info(f"✅ Données générales du match récupérées: {match_data}")
+        logging.info(f"✅ Données générales du match récupérées: {metadata.get('matchId')}")
 
         info_participants = info.get('participants')
         stats_participants = []
@@ -162,6 +162,14 @@ class Riotgames():
 
                 "champ_level": participant.get('champLevel'),
                 "champ_experience": participant.get('champExperience'),
+
+                "item0": participant.get('item0'),
+                "item1": participant.get('item1'),
+                "item2": participant.get('item2'),
+                "item3": participant.get('item3'),
+                "item4": participant.get('item4'),
+                "item5": participant.get('item5'),
+                "item6": participant.get('item6'),
             }
 
             stats_participants.append(stats)
@@ -179,7 +187,7 @@ class Riotgames():
     def __treatment_puuid_info(
         puuid: str,
     ) -> dict:
-        
+
         Riotgames.__awake()
         endpoint = f"/riot/account/v1/accounts/by-puuid/{puuid}"
         url = f"{Riotgames.HTTP_HOST}{endpoint}"
@@ -192,15 +200,15 @@ class Riotgames():
         logging.info(f"✅ Récupération des informations du PUUID réussie pour le PUUID: {puuid}")
 
         return puuid_info
-    
+
     @staticmethod
     def __treatment_league_entries(
         puuid: str,
     ) -> dict:
-        
+
         Riotgames.__awake(http='euw1')
         entry_5v5 = {}
-        
+
         endpoint = f"/lol/league/v4/entries/by-puuid/{puuid}"
         url = f"{Riotgames.HTTP_HOST}{endpoint}"
 
@@ -212,7 +220,7 @@ class Riotgames():
 
         for entry in league_entries:
             queue_type = entry.get('queueType')
-            if queue_type in ['RANKED_SOLO_5x5']: 
+            if queue_type in ['RANKED_SOLO_5x5']:
                 entry_5v5 = entry
                 break
 
@@ -228,7 +236,7 @@ class Riotgames():
         xcom_source: str,
         **context
     ) -> Any:
-        
+
         df_puuid = manager.Xcom.get(
             xcom_source=xcom_source,
             **context
@@ -286,7 +294,7 @@ class Riotgames():
 
         if lol_puuid.empty or 'puuid' not in lol_puuid.columns:
             raise AirflowSkipException("❌ Le PUUID n'a pas été trouvé dans la source XCom fournie.")
-        
+
         matchs = []
         total_calls = 0
 
@@ -329,7 +337,7 @@ class Riotgames():
 
         df_matches = pd.DataFrame(matchs)
         df_matches.columns = ['match_id']
-        
+
         logging.info(f"📈 Nombre total d'appels API effectués: {total_calls}")
         logging.info(f"✅ DataFrame des matchs créé avec {len(df_matches)} entrées.")
 
@@ -400,5 +408,6 @@ class Riotgames():
 
         return manager.Xcom.put(
             input=all_match_details,
+            xcom_strategy='direct',
             **context
         )
