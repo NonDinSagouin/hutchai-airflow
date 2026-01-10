@@ -117,6 +117,7 @@ class PostgresWarehouse():
         schema_order: str = None,
         limit: int = None,
         skip_empty: bool = False,
+        joins: list = None,
         **kwargs
     ) -> Any:
         """ Extrait des données d'un entrepôt de données (Data Warehouse).
@@ -130,6 +131,11 @@ class PostgresWarehouse():
             schema_order (str, optional): Colonne pour ordonner les résultats. Par défaut None (pas d'ordre).
             limit (int, optional): Limite le nombre de lignes extraites. Par défaut None (aucune limite).
             skip_empty (bool, optional): Si True, saute la tâche si aucune donnée n'est extraite. Par défaut False.
+            joins (list, optional): (avec alias t_main pour la table principale) Liste des jointures à effectuer. Chaque élément est un dictionnaire avec les clés:
+                - 'table': nom de la table à joindre (format: schema.table ou table)
+                - 'on': condition de jointure (ex: "t1.id = t2.id")
+                - 'type': type de jointure (INNER, LEFT, RIGHT, FULL). Par défaut INNER.
+                - 'alias': alias pour la table jointe (optionnel)
 
         Returns:
             Any: Données extraites sous forme de DataFrame ou autre format selon l'implémentation.
@@ -138,17 +144,53 @@ class PostgresWarehouse():
             >>> PostgresWarehouse.extract(
             ...     engine=engine,
             ...     table_name="sales_data",
-            ...     schema="toto",
-            ...     schema_select=["id", "amount", "date"],
-            ...     schema_where={"region": "North", "year": 2023}
+            ...     schema="public",
+            ...     schema_select=["s.id", "s.amount", "c.name"],
+            ...     joins=[
+            ...         {
+            ...             'table': 'customers',
+            ...             'alias': 'c',
+            ...             'on': 's.customer_id = c.id',
+            ...             'type': 'INNER'
+            ...         }
+            ...     ],
+            ...     schema_where={"s.year": 2023}
             ... )
-            Extrait les colonnes "id", "amount" et "date" de la table "sales_data" pour les enregistrements où la région est "North" et l'année est 2025.
+            Extrait des données de sales_data avec une jointure INNER sur customers.
         """
         query = f"\nSELECT \n\t * \n\r FROM \n\t {schema}.{table_name} "
 
+        # Gestion des alias pour la table principale
+        main_table_alias = ""
+        if joins:
+            # Si on a des jointures, on ajoute un alias à la table principale pour éviter l'ambiguité
+            main_table_alias = "t_main"
+            query = f"\nSELECT \n\t * \n\r FROM \n\t {schema}.{table_name} AS {main_table_alias} "
+
         if schema_select:
             select_columns = '\n\t, '.join(schema_select)
-            query = f"\nSELECT \n\t{select_columns} \nFROM \n\t{schema}.{table_name} "
+            if joins:
+                query = f"\nSELECT \n\t{select_columns} \nFROM \n\t{schema}.{table_name} AS {main_table_alias} "
+            else:
+                query = f"\nSELECT \n\t{select_columns} \nFROM \n\t{schema}.{table_name} "
+
+        # Construction des jointures
+        if joins:
+            for join in joins:
+                join_type = join.get('type', 'INNER').upper()
+                join_table = join['table']
+                join_on = join['on']
+                join_alias = join.get('alias', '')
+                
+                # Ajouter le schéma par défaut si pas spécifié dans la table
+                if '.' not in join_table:
+                    join_table = f"{schema}.{join_table}"
+                
+                # Construction de la clause JOIN
+                if join_alias:
+                    query += f"\n{join_type} JOIN \n\t{join_table} AS {join_alias} \n\t\tON {join_on}"
+                else:
+                    query += f"\n{join_type} JOIN \n\t{join_table} \n\t\tON {join_on}"
         if schema_where:
 
             where_conditions = []

@@ -16,7 +16,7 @@ class Xcom:
     SUPPORTED_FORMATS = ['json', 'parquet']
 
     @staticmethod
-    def get(
+    def get( # TODO: ajouter skip_if_empty
         xcom_source : str,
         **context
     ) -> pd.DataFrame | dict | str:
