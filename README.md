@@ -33,6 +33,14 @@
 ### 🔹 Présentation générale
 Ce projet met en œuvre des pipelines ETL avec Apache Airflow pour l'orchestration de workflows de données League of Legends. Il extrait, transforme et charge des données depuis l'API Riot Games vers un data warehouse PostgreSQL. Le projet utilise Apache Spark pour les traitements distribués et est organisé en plusieurs dossiers pour assurer une séparation claire des responsabilités et une meilleure maintenabilité.
 
+#### 📊 Dashboards Grafana
+###### Dashboard des statistiques par joueur
+![Dashboard des statistiques par joueur](doc/images/par_joueurs.png)
+###### Dashboard des statistiques par champion
+![Dashboard des statistiques par joueur](doc/images/par_champion.png)
+###### Dashboard des statistiques du top des champions
+![Dashboard des statistiques par joueur](doc/images/top_champions.png)
+
 ### 🔹 Arborescence et description des sous-dossiers
 
 - 🗂️ `app/` : Code applicatif principal du projet
