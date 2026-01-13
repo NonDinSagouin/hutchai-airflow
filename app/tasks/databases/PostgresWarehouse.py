@@ -261,7 +261,7 @@ class PostgresWarehouse():
             Extrait l'élément "match_data" du dictionnaire retourné par "fetch_task".
         """
 
-        data = manager.Xcom.get(xcom_source=xcom_source, **kwargs)
+        data = manager.Xcom.get(xcom_source=xcom_source, skip_if_empty=True, **kwargs)
 
         if not isinstance(data, dict):
             raise AirflowFailException(f"Les données récupérées ne sont pas un dictionnaire. Type reçu: {type(data)}")
@@ -318,10 +318,7 @@ class PostgresWarehouse():
             Insère les données extraites par la tâche "extract_task" dans la table "public.sales_data" du Data Warehouse.
         """
 
-        df = manager.Xcom.get(xcom_source=xcom_source, **kwargs)
-
-        if df is None:
-            raise AirflowFailException(f"❌ La source XCom '{xcom_source}' n'existe pas ou ne retourne aucune donnée.")
+        df = manager.Xcom.get(xcom_source=xcom_source, skip_if_empty=True, **kwargs)
 
         if not isinstance(df, pd.DataFrame):
             raise AirflowFailException(f"❌ Les données récupérées depuis '{xcom_source}' ne sont pas un DataFrame. Type reçu: {type(df)}")

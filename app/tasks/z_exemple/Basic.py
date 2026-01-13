@@ -136,6 +136,7 @@ class Basic():
 
         data = manager.Xcom.get(
             xcom_source=xcom_source,
+            skip_if_empty=True,
             **kwargs
         )
 

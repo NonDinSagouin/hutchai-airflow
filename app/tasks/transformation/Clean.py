@@ -29,6 +29,7 @@ class Clean():
 
         df = manager.Xcom.get(
             xcom_source=xcom_source,
+            skip_if_empty=True,
             **kwargs
         )
 
@@ -73,6 +74,7 @@ class Clean():
 
         df = manager.Xcom.get(
             xcom_source=xcom_source,
+            skip_if_empty=True,
             **kwargs
         )
 
@@ -113,6 +115,7 @@ class Clean():
 
         df = manager.Xcom.get(
             xcom_source=xcom_source,
+            skip_if_empty=True,
             **kwargs
         )
 

@@ -114,10 +114,6 @@ class Spark:
         except Exception as e:
             raise AirflowFailException("❌ Échec de la fermeture de la SparkSession.") from e
 
-        finally:
-            if app_name in Spark.__session:
-                del Spark.__session[app_name]  # Réinitialiser quand même
-
     @staticmethod
     def __set(
         conn_id: str = "spark_default",

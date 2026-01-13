@@ -18,12 +18,14 @@ class Xcom:
     @staticmethod
     def get( # TODO: ajouter skip_if_empty
         xcom_source : str,
+        skip_if_empty: bool = False,
         **context
     ) -> pd.DataFrame | dict | str:
         """ Récupère un DataFrame à partir des données stockées dans XCom.
 
         Args:
             xcom_source (str): ID de la tâche source des données XCom
+            skip_if_empty (bool, optionnel): Si True, retourne None si aucune donnée n'est trouvée. Par défaut à False.
             **context: Contexte Airflow contenant TaskInstance
 
         Returns:
@@ -48,7 +50,10 @@ class Xcom:
         data = ti.xcom_pull(task_ids=xcom_source)
 
         if data is None:
-            raise AirflowFailException(f"❌ Aucune donnée trouvée pour '{xcom_source}'")
+            if skip_if_empty:
+                return None
+            else:
+                raise AirflowFailException(f"❌ Aucune donnée trouvée pour '{xcom_source}'")
 
         processed_data = Xcom.__process_data(data)
         Xcom.__log_result(processed_data)

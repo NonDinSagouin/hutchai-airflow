@@ -91,10 +91,9 @@ class Custom():
         """
         df_stats = manager.Xcom.get(
             xcom_source=xcom_source,
+            skip_if_empty=True,
             **kwargs
         )
-        if df_stats is None:
-            raise AirflowSkipException("Aucune donnée extraite pour le calcul des KPI.")
         
         if not per_player and not per_champion:
             raise AirflowFailException("Place holer erreur !")

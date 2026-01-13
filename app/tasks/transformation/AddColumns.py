@@ -69,7 +69,7 @@ class AddColumns():
         if 'dag' not in kwargs:
             raise KeyError("❌ 'dag' absent du contexte Airflow")
 
-        data = manager.Xcom.get(xcom_source, **kwargs)
+        data = manager.Xcom.get(xcom_source, skip_if_empty=True, **kwargs)
 
         if not isinstance(data, pd.DataFrame):
             raise TypeError(f"❌ tech_info nécessite un DataFrame, reçu: {type(data)}")
@@ -119,7 +119,7 @@ class AddColumns():
         """
 
         # Récupération et validation
-        data = manager.Xcom.get(xcom_source, **kwargs)
+        data = manager.Xcom.get(xcom_source, skip_if_empty=True, **kwargs)
 
         if not isinstance(data, pd.DataFrame):
             raise TypeError(f"❌ tech_photo nécessite un DataFrame, reçu: {type(data)}")

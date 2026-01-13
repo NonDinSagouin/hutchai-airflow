@@ -48,7 +48,7 @@ class Custom():
             pd.DataFrame: DataFrame contenant la liste des champions avec les informations demandées.
         """
 
-        data_xcom = manager.Xcom.get(xcom_source=xcom_source, **context)
+        data_xcom = manager.Xcom.get(xcom_source=xcom_source, skip_if_empty=True, **context)
         champions_data = data_xcom["data"]
 
         # Créer une liste des champions avec les informations demandées
@@ -92,7 +92,7 @@ class Custom():
             pd.DataFrame: DataFrame contenant la liste des items avec les informations demandées.
         """
 
-        data_xcom = manager.Xcom.get(xcom_source=xcom_source, **context)
+        data_xcom = manager.Xcom.get(xcom_source=xcom_source, skip_if_empty=True, **context)
         items_data = data_xcom["data"]
 
         # Créer une liste des items avec les informations demandées

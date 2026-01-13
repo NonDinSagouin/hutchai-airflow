@@ -33,6 +33,7 @@ class Combine():
 
             data_to_merge = manager.Xcom.get(
                 xcom_source= source,
+                skip_if_empty=True,
                 **kwargs,
             )
         

@@ -239,12 +239,13 @@ class Riotgames():
 
         df_puuid = manager.Xcom.get(
             xcom_source=xcom_source,
+            skip_if_empty=True,
             **context
         )
 
-        if df_puuid.empty or 'puuid' not in df_puuid.columns:
+        if 'puuid' not in df_puuid.columns:
             raise AirflowSkipException("❌ Le PUUID n'a pas été trouvé dans la source XCom fournie.")
-
+        
         for index, row in df_puuid.iterrows():
             puuid_info = Riotgames.__treatment_puuid_info(row['puuid'])
             league_entries = Riotgames.__treatment_league_entries(row['puuid'])
@@ -289,10 +290,11 @@ class Riotgames():
 
         lol_puuid = manager.Xcom.get(
             xcom_source=xcom_source,
+            skip_if_empty=True,
             **context
         )
 
-        if lol_puuid.empty or 'puuid' not in lol_puuid.columns:
+        if 'puuid' not in lol_puuid.columns:
             raise AirflowSkipException("❌ Le PUUID n'a pas été trouvé dans la source XCom fournie.")
 
         matchs = []
@@ -364,10 +366,11 @@ class Riotgames():
 
         matchs_id = manager.Xcom.get(
             xcom_source=xcom_source,
+            skip_if_empty=True,
             **context
         )
 
-        if matchs_id.empty or 'match_id' not in matchs_id.columns:
+        if 'match_id' not in matchs_id.columns:
             raise AirflowSkipException("❌ L'identifiant des matchs n'ont pas été trouvés dans la source XCom fournie.")
 
         Riotgames.__awake()
