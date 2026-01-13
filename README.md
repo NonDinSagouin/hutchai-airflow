@@ -21,6 +21,22 @@
 ![Pandas](https://img.shields.io/badge/pandas-%23150458.svg?style=for-the-badge&logo=pandas&logoColor=white)
 ![Apache Spark](https://img.shields.io/badge/Apache%20Spark-E25A1C?style=for-the-badge&logo=apachespark&logoColor=white)
 
+## 🔹 État du projet
+Statut : ✅ TERMINÉ
+Date de fin : 31/12/2025
+
+Objectifs atteints :
+
+- ✅ Mise en place de pipelines ETL avec Apache Airflow
+- ✅ Extraction de données depuis l'API Riot Games
+- ✅ Stockage dans un data warehouse PostgreSQL
+- ✅ Dashboards Grafana opérationnels
+- ✅ Architecture Docker complète
+- ✅ Documentation complète du projet
+
+Résultats :
+Le projet livre une solution complète d'orchestration de données League of Legends avec des pipelines ETL automatisés, des dashboards de visualisation et une architecture scalable.
+
 # STRUCTURE GÉNÉRALE DU PROJET
 ---
 
