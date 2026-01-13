@@ -3,7 +3,7 @@
 [![Mise à jour](https://img.shields.io/badge/dernière%20mise%20à%20jour-31/12/2025-blue)](./)
 [![Version](https://img.shields.io/badge/Version-0.1.0-brightgreen.svg)]()
 
-[![Status](https://img.shields.io/badge/Status-Active-success.svg)]()
+[![Status](https://img.shields.io/badge/Status-Terminé-success.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-red.svg)](LICENSE)
 
 ![Airflow](https://img.shields.io/badge/Airflow-3.1.3%2B-017CEE?logo=apacheairflow&logoColor=white)
