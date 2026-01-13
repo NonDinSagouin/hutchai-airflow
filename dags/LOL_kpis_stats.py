@@ -10,9 +10,7 @@ from airflow.sdk import chain, Asset, TaskGroup
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-import app.tasks.api as api
 import app.tasks.databases as databases
-import app.tasks.transformation as transformation
 import app.manager as manager
 import app.helper as helper
 
@@ -39,7 +37,8 @@ class Custom():
     @staticmethod
     def kpi(
         xcom_source: str,
-        per_champion: bool = True,
+        per_player: bool = False,
+        per_champion: bool = False,
         **kwargs
     ) -> Any:
         """ Calcul des KPI de performance des joueurs par champion.
@@ -77,9 +76,10 @@ class Custom():
                 - tanking_index: Indice de performance en tanking.
                 - damage_index: Indice de performance en dégâts.
                 - support_index: Indice de performance en support.
-                - game_name: Nom du joueur.
-                - champion_name: Nom du champion.
-                - champion_id: ID du champion.
+
+                - game_name: Nom du joueur. Si per_player = True
+                - champion_name: Nom du champion. Si per_champion = True
+                - champion_id: ID du champion. Si per_champion = True
 
         Exemple:
             >>> kpi = Custom.kpi(
@@ -95,6 +95,9 @@ class Custom():
         )
         if df_stats is None:
             raise AirflowSkipException("Aucune donnée extraite pour le calcul des KPI.")
+        
+        if not per_player and not per_champion:
+            raise AirflowFailException("Place holer erreur !")
 
         spark = manager.Spark.get(
             app_name="LOL_kpis_stats",
@@ -107,12 +110,8 @@ class Custom():
         df_spark = spark.createDataFrame(df_stats)
         df_spark.createOrReplaceTempView("stats")
 
-        
-        select = "game_name, champion_name, champion_id" if per_champion else "game_name"
-        groupby = "game_name, champion_name, champion_id" if per_champion else "game_name"
-
         logging.info("🔥 Début du calcul des KPI de dégâts par minute par joueur/champion")
-        query = f"""
+        query = """
             SELECT 
                 AVG(total_damage_dealt_to_champions / (game_duration / 60)) AS avg_damage_per_minute,
                 AVG(physical_damage_dealt_to_champions / (game_duration / 60)) AS avg_physical_damage_per_minute,
@@ -171,35 +170,52 @@ class Custom():
                 
                 -- Indices de performance
                 AVG(
-                    (total_damage_taken / GREATEST(deaths, 1)) * 0.4 +
-                    (total_heal / (game_duration / 60)) * 0.3 +
-                    (1.0 / GREATEST(deaths / (game_duration / 60), 0.1)) * 0.3
+                    (total_damage_taken / (game_duration / 60)) * 0.35
+                    + (total_heal / (game_duration / 60)) * 0.25
+                    + (1.0 / GREATEST(deaths / (game_duration / 60), 0.1)) * 0.3
+                    - (deaths / (game_duration / 60)) * 50
                 ) AS tanking_index,
                 
                 AVG(
-                    (total_damage_dealt_to_champions / (game_duration / 60)) * 0.5 +
-                    (kills / (game_duration / 60)) * 200 +
-                    (double_kills * 2 + triple_kills * 4 + quadra_kills * 8 + penta_kills * 16) * 5
+                    (total_damage_dealt_to_champions / (game_duration / 60)) * 0.6
+                    + (kills / (game_duration / 60)) * 80
+                    + (double_kills * 2 + triple_kills * 4 + quadra_kills * 8 + penta_kills * 16) * 4
+                    - (deaths / (game_duration / 60)) * 50
                 ) AS damage_index,
                 
                 AVG(
-                    (assists / (game_duration / 60)) * 300 +
-                    ((kills + assists) / GREATEST(deaths, 1)) * 100 +
-                    (total_heal / (game_duration / 60)) * 0.2
+                    (assists / (game_duration / 60)) * 180
+                    + (total_heal / (game_duration / 60)) * 0.15
+                    - (deaths / (game_duration / 60)) * 80
                 ) AS support_index,
                 
                 -- Informations de groupement
-                {select}
+                {{params}}
             FROM 
                 stats
             WHERE 
                 game_duration > 120 -- Filtrer les parties de plus de 2 minutes
             GROUP BY 
-                {groupby}
+                {{params}}
             ORDER BY 
-                game_name, total_games DESC
+                {{params}}, total_games DESC
         """
-        kpi_dpm = spark.sql(query)
+
+        params_fields = []
+
+        if per_player:
+            params_fields.extend(["game_name"])
+        if per_champion:
+            params_fields.extend(["champion_name", "champion_id"])
+
+        kpi_dpm = spark.sql(
+            helper.render_jinja2(
+                query,
+                params={
+                    "params": ", ".join(params_fields),
+                }
+            )
+        )
 
         logging.info("✅ Calcul des KPI de dégâts par minute par joueur/champion terminé")
         kpi_dpm.show()
@@ -266,11 +282,11 @@ with DAG(
         "support_index": "support_index",
     }
 
-    get_full_stats = databases.PostgresWarehouse.extract(
+    get_full_stats_by_puuid_to_process = databases.PostgresWarehouse.extract(
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
-        table_name="lol_fact_stats",
         schema="lol_fact_datas",
-        task_id="get_full_stats",
+        table_name="lol_fact_stats",
+        task_id="get_full_stats_by_puuid_to_process",
         schema_select=[
             "t_main.*",
             "puuid.game_name",
@@ -292,12 +308,32 @@ with DAG(
         ],
     )
 
+    get_full_stats_by_champion = databases.PostgresWarehouse.extract(
+        engine=manager.Connectors.postgres("POSTGRES_warehouse"),
+        schema="lol_fact_datas",
+        table_name="lol_fact_stats",
+        task_id="get_full_stats_by_champion",
+        schema_select=[
+            "t_main.*",
+            "match.game_duration",
+        ],
+        joins=[
+            {
+                'table': 'lol_fact_datas.lol_fact_match',
+                'alias': 'match',
+                'on': 't_main.match_id = match.match_id',
+                'type': 'INNER'
+            },
+        ],
+    )
+
     with TaskGroup("groupe_per_player") as groupe_per_player:
 
         task_kpi_per_player = Custom.kpi(
             task_id = "task_kpi_per_player",
-            xcom_source = "get_full_stats",
+            xcom_source = "get_full_stats_by_puuid_to_process",
             per_champion = False,
+            per_player = True,
         )
 
         insert_lol_raw_kpi_per_player = databases.PostgresWarehouse.insert(
@@ -309,8 +345,8 @@ with DAG(
             if_table_exists="replace",
         )
 
-        non_match_columns = match_columns
-        non_match_columns["game_name"] = "game_name"
+        non_match_columns_per_player = match_columns.copy()
+        non_match_columns_per_player["game_name"] = "game_name"
 
         # Transformation des données brutes en données factuelles
         raw_to_fact_kpi_per_player = databases.PostgresWarehouse.raw_to_fact(
@@ -323,7 +359,7 @@ with DAG(
             has_matched=True,
             join_keys=["game_name"],
             match_columns=match_columns,
-            non_match_columns=non_match_columns,
+            non_match_columns=non_match_columns_per_player,
         )
         
         chain(
@@ -336,8 +372,9 @@ with DAG(
 
         task_kpi_per_player_champion = Custom.kpi(
             task_id = "task_kpi_per_player_champion",
-            xcom_source = "get_full_stats",
+            xcom_source = "get_full_stats_by_puuid_to_process",
             per_champion = True,
+            per_player = True,
         )
 
         # Insertion des données brutes dans la table d'entrepôt
@@ -350,10 +387,10 @@ with DAG(
             if_table_exists="replace",
         )
 
-        non_match_columns = match_columns
-        non_match_columns["game_name"] = "game_name"
-        non_match_columns["champion_name"] = "champion_name"
-        non_match_columns["champion_id"] = "champion_id"
+        non_match_columns_per_player_champion = match_columns.copy()
+        non_match_columns_per_player_champion["game_name"] = "game_name"
+        non_match_columns_per_player_champion["champion_name"] = "champion_name"
+        non_match_columns_per_player_champion["champion_id"] = "champion_id"
 
         # Transformation des données brutes en données factuelles
         raw_to_fact_kpi_per_player_champion = databases.PostgresWarehouse.raw_to_fact(
@@ -366,7 +403,7 @@ with DAG(
             has_matched=True,
             join_keys=["game_name", "champion_id"],
             match_columns=match_columns,
-            non_match_columns=non_match_columns,
+            non_match_columns=non_match_columns_per_player_champion,
         )
         chain(
             task_kpi_per_player_champion,
@@ -374,7 +411,53 @@ with DAG(
             raw_to_fact_kpi_per_player_champion,
         )
 
+    with TaskGroup("groupe_per_champion") as groupe_per_champion:
+
+        task_kpi_per_champion = Custom.kpi(
+            task_id = "task_kpi_per_champion",
+            xcom_source = "get_full_stats_by_champion",
+            per_champion = True,
+            per_player = False,
+        )
+
+        # Insertion des données brutes dans la table d'entrepôt
+        insert_lol_raw_kpi_per_champion = databases.PostgresWarehouse.insert(
+            task_id="insert_lol_raw_kpi_per_champion",
+            xcom_source="groupe_per_champion.task_kpi_per_champion",
+            engine=manager.Connectors.postgres("POSTGRES_warehouse"),
+            table_name="lol_raw_kpi_per_champion",
+            schema="lol_raw_datas",
+            if_table_exists="replace",
+        )
+
+        non_match_columns_per_champion = match_columns.copy()
+        non_match_columns_per_champion["champion_name"] = "champion_name"
+        non_match_columns_per_champion["champion_id"] = "champion_id"
+
+        # Transformation des données brutes en données factuelles
+        raw_to_fact_kpi_per_champion = databases.PostgresWarehouse.raw_to_fact(
+            task_id="raw_to_fact_kpi_per_champion",
+            outlets=[Asset('warehouse://lol_mart_datas/lol_kpi_stats_per_champion')],
+            source_table="lol_raw_datas.lol_raw_kpi_per_champion",
+            target_table="lol_mart_datas.lol_kpi_stats_per_champion",
+            engine=manager.Connectors.postgres("POSTGRES_warehouse"),
+            has_not_matched=True,
+            has_matched=True,
+            join_keys=["champion_id"],
+            match_columns=match_columns,
+            non_match_columns=non_match_columns_per_champion,
+        )
+        chain(
+            task_kpi_per_champion,
+            insert_lol_raw_kpi_per_champion,
+            raw_to_fact_kpi_per_champion,
+        )
+
     chain(
-        get_full_stats,
-        [groupe_per_player_champion, groupe_per_player],
+        get_full_stats_by_puuid_to_process,
+        [groupe_per_player, groupe_per_player_champion],
+    )
+    chain(
+        get_full_stats_by_champion,
+        groupe_per_champion,
     )

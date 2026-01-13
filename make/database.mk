@@ -2,7 +2,7 @@
 # Commandes Database
 # ====================================
 
-setup-db: setup-schema setup_table_lol_fact_match setup_table_lol_fact_puuid setup_table_lol_kpi_stats_per_player_champion setup_table_lol_kpi_stats_per_player setup_table_lol_fact_puuid_to_process setup-table-lol_fact_stats setup-data-puuid ## Initialise la base de données du warehouse avec les schémas et tables nécessaires
+setup-db: setup-schema setup_table_lol_fact_match setup_table_lol_fact_puuid setup_table_lol_kpi_stats_per_player_champion setup_table_lol_kpi_stats_per_player setup_table_lol_kpi_stats_per_champion setup_table_lol_fact_puuid_to_process setup-table-lol_fact_stats setup-data-puuid ## Initialise la base de données du warehouse avec les schémas et tables nécessaires
 	@echo "✅ Initialisation complète de la base de données du warehouse réussie !"
 
 setup-schema:
@@ -155,6 +155,48 @@ setup_table_lol_kpi_stats_per_player: ## Crée la table lol_kpi_stats_per_player
 			damage_index double precision, \
 			support_index double precision, \
 			game_name text COLLATE pg_catalog."default", \
+			tech_date_creation TIMESTAMP DEFAULT CURRENT_TIMESTAMP, \
+			tech_date_modification TIMESTAMP DEFAULT CURRENT_TIMESTAMP \
+		);" || { echo "❌ Échec de la création de la table lol_kpi_stats"; exit 1; }
+	@echo "✅ Table lol_kpi_stats créée avec succès !"
+
+setup_table_lol_kpi_stats_per_champion: ## Crée la table lol_kpi_stats_per_champion dans le warehouse
+	@echo "🔨 Création de la table lol_kpi_stats_per_champion dans le warehouse..."
+	@$(DE) $(WAREHOUSE) psql -U warehouse -d warehouse -c "\
+		CREATE TABLE IF NOT EXISTS lol_mart_datas.lol_kpi_stats_per_champion ( \
+			avg_damage_per_minute double precision, \
+			avg_physical_damage_per_minute double precision, \
+			avg_magic_damage_per_minute double precision, \
+			avg_true_damage_per_minute double precision, \
+			avg_physical_damage_dealt_pct text COLLATE pg_catalog."default", \
+			avg_magic_damage_dealt_pct text COLLATE pg_catalog."default", \
+			avg_true_damage_dealt_pct text COLLATE pg_catalog."default", \
+			avg_kills_per_minute double precision, \
+			avg_deaths_per_minute double precision, \
+			avg_assists_per_minute double precision, \
+			avg_multi_kill_score double precision, \
+			penta_rate text COLLATE pg_catalog."default", \
+			avg_damage_taken_per_death double precision, \
+			avg_physical_damage_taken_per_minute double precision, \
+			avg_magic_damage_taken_per_minute double precision, \
+			avg_true_damage_taken_per_minute double precision, \
+			avg_physical_damage_taken_pct text COLLATE pg_catalog."default", \
+			avg_magic_damage_taken_pct text COLLATE pg_catalog."default", \
+			avg_true_damage_taken_pct text COLLATE pg_catalog."default", \
+			avg_heal_per_minute double precision, \
+			avg_cs_per_minute double precision, \
+			avg_gold_per_minute double precision, \
+			avg_gold_per_cs double precision, \
+			avg_kda double precision, \
+			total_games bigint, \
+			best_kills bigint, \
+			best_damage bigint, \
+			best_deaths bigint, \
+			tanking_index double precision, \
+			damage_index double precision, \
+			support_index double precision, \
+			champion_name text COLLATE pg_catalog."default", \
+			champion_id bigint, \
 			tech_date_creation TIMESTAMP DEFAULT CURRENT_TIMESTAMP, \
 			tech_date_modification TIMESTAMP DEFAULT CURRENT_TIMESTAMP \
 		);" || { echo "❌ Échec de la création de la table lol_kpi_stats"; exit 1; }

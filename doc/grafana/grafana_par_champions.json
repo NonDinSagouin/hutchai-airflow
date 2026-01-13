@@ -18,85 +18,101 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 4,
+  "id": 12,
   "links": [],
   "panels": [
     {
       "datasource": {
+        "type": "grafana-postgresql-datasource",
         "uid": "af7osz2r6zgg0f"
       },
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "fillOpacity": 80,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineWidth": 1,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "mode": "thresholds"
           },
           "mappings": [],
           "thresholds": {
-            "mode": "absolute",
+            "mode": "percentage",
             "steps": [
               {
                 "color": "green",
                 "value": 0
-              },
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Carry"
+            },
+            "properties": [
               {
-                "color": "red",
-                "value": 80
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
               }
             ]
           },
-          "unit": "short"
-        },
-        "overrides": []
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Tanking"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Support"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
-        "h": 11,
-        "w": 6,
+        "h": 8,
+        "w": 17,
         "x": 0,
         "y": 0
       },
-      "id": 1,
+      "id": 7,
       "options": {
-        "barRadius": 0,
-        "barWidth": 0.97,
-        "fullHighlight": false,
-        "groupWidth": 0.7,
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "right",
-          "showLegend": false
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
         },
-        "orientation": "horizontal",
-        "showValue": "never",
-        "stacking": "none",
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        },
-        "xTickLabelRotation": 0,
-        "xTickLabelSpacing": 0
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
       },
       "pluginVersion": "12.3.0",
       "targets": [
@@ -105,7 +121,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT \r\n  champion_name AS \"Nom du champion\",\r\n  total_games AS \"Nombre de game\"\r\nFROM lol_mart_datas.lol_kpi_stats_per_player_champion\r\nWHERE game_name = 'JeanPomme'\r\nORDER BY total_games DESC\r\nLIMIT 10",
+          "rawSql": "SELECT \r\n  damage_index AS \"Carry\",\r\n  tanking_index AS \"Tanking\",\r\n  support_index AS \"Support\"\r\n  \r\nFROM \r\n  lol_mart_datas.lol_kpi_stats_per_champion\r\nWHERE \r\n  champion_name = '$champion_name'",
           "refId": "A",
           "sql": {
             "columns": [
@@ -126,8 +142,119 @@
           }
         }
       ],
-      "title": "Top 10 des champions les plus joués",
-      "type": "barchart"
+      "title": "Indices de performance",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "af7osz2r6zgg0f"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "purple",
+            "mode": "fixed"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#E02F44",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "KDA"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": 0
+                    },
+                    {
+                      "color": "red",
+                      "value": 80
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 7,
+        "x": 17,
+        "y": 0
+      },
+      "id": 6,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "dataset": "warehouse",
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT \r\n  avg_kda AS \"KDA\"\r\nFROM \r\n  lol_mart_datas.lol_kpi_stats_per_champion\r\nWHERE \r\n  champion_name = '$champion_name'",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Le KDA - (Kill+Assist)/Mort",
+      "type": "stat"
     },
     {
       "datasource": {
@@ -148,13 +275,59 @@
           },
           "mappings": []
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Dégâts physiques"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Dégâts magiques"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Dégâts brute"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "purple",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
-        "h": 11,
+        "h": 12,
         "w": 5,
-        "x": 6,
-        "y": 0
+        "x": 0,
+        "y": 8
       },
       "id": 3,
       "options": {
@@ -190,7 +363,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT \r\n  avg_physical_damage_per_minute AS \"Dégâts physiques\",\r\n  avg_magic_damage_per_minute AS \"Dégâts magiques\",\r\n  avg_true_damage_per_minute AS \"Dégâts brute\"\r\nFROM \r\n  lol_mart_datas.lol_kpi_stats_per_player\r\nWHERE game_name = 'JeanPomme'",
+          "rawSql": "SELECT \r\n  avg_physical_damage_per_minute AS \"Dégâts physiques\",\r\n  avg_magic_damage_per_minute AS \"Dégâts magiques\",\r\n  avg_true_damage_per_minute AS \"Dégâts brute\"\r\nFROM \r\n  lol_mart_datas.lol_kpi_stats_per_champion\r\nWHERE champion_name = '$champion_name'",
           "refId": "A",
           "sql": {
             "columns": [
@@ -211,7 +384,7 @@
           }
         }
       ],
-      "title": "Répartition des dégâts infligés par minute",
+      "title": "⚔️ Répartition des dégâts infligés par minute",
       "type": "piechart"
     },
     {
@@ -233,13 +406,59 @@
           },
           "mappings": []
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Dégâts physiques"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Dégâts magiques"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Dégâts brute"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "purple",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
-        "h": 11,
-        "w": 5,
-        "x": 11,
-        "y": 0
+        "h": 12,
+        "w": 4,
+        "x": 5,
+        "y": 8
       },
       "id": 5,
       "options": {
@@ -275,7 +494,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT \r\n  avg_physical_damage_taken_per_minute AS \"Dégâts physiques\",\r\n  avg_magic_damage_taken_per_minute AS \"Dégâts magiques\",\r\n  avg_true_damage_taken_per_minute AS \"Dégâts brute\"\r\nFROM \r\n  lol_mart_datas.lol_kpi_stats_per_player\r\nWHERE game_name = 'JeanPomme'",
+          "rawSql": "SELECT \r\n  avg_physical_damage_taken_per_minute AS \"Dégâts physiques\",\r\n  avg_magic_damage_taken_per_minute AS \"Dégâts magiques\",\r\n  avg_true_damage_taken_per_minute AS \"Dégâts brute\"\r\nFROM \r\n  lol_mart_datas.lol_kpi_stats_per_champion\r\nWHERE \r\n  champion_name = '$champion_name'",
           "refId": "A",
           "sql": {
             "columns": [
@@ -296,7 +515,7 @@
           }
         }
       ],
-      "title": "Répartition des dégâts subis par minute",
+      "title": "🛡️Répartition des dégâts subis par minute",
       "type": "piechart"
     },
     {
@@ -325,13 +544,59 @@
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Kill par minute"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Deaths par minute"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Assists par minute"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
-        "h": 7,
+        "h": 8,
         "w": 8,
-        "x": 16,
-        "y": 0
+        "x": 9,
+        "y": 8
       },
       "id": 4,
       "options": {
@@ -356,7 +621,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT \r\n  avg_kills_per_minute AS \"Kill par minute\",\r\n  avg_deaths_per_minute AS \"Deaths par minute\",\r\n  avg_assists_per_minute AS \"Assists par brute\"\r\nFROM \r\n  lol_mart_datas.lol_kpi_stats_per_player\r\nWHERE game_name = 'JeanPomme'",
+          "rawSql": "SELECT \r\n  avg_kills_per_minute AS \"Kill par minute\",\r\n  avg_deaths_per_minute AS \"Deaths par minute\",\r\n  avg_assists_per_minute AS \"Assists par minute\"\r\nFROM \r\n  lol_mart_datas.lol_kpi_stats_per_champion\r\nWHERE \r\n  champion_name = '$champion_name'",
           "refId": "A",
           "sql": {
             "columns": [
@@ -392,19 +657,15 @@
           },
           "mappings": [],
           "thresholds": {
-            "mode": "percentage",
+            "mode": "absolute",
             "steps": [
               {
                 "color": "green",
                 "value": 0
               },
               {
-                "color": "orange",
-                "value": 70
-              },
-              {
                 "color": "red",
-                "value": 85
+                "value": 80
               }
             ]
           }
@@ -413,11 +674,11 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 8,
-        "x": 16,
-        "y": 7
+        "w": 7,
+        "x": 17,
+        "y": 8
       },
-      "id": 6,
+      "id": 10,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -442,7 +703,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT \r\n  avg_kda AS \"KDA\"\r\nFROM \r\n  lol_mart_datas.lol_kpi_stats_per_player\r\nWHERE game_name = 'JeanPomme'",
+          "rawSql": "SELECT \r\n  total_games\r\nFROM \r\n  lol_mart_datas.lol_kpi_stats_per_champion\r\nWHERE \r\n  champion_name = '$champion_name'",
           "refId": "A",
           "sql": {
             "columns": [
@@ -463,279 +724,7 @@
           }
         }
       ],
-      "title": "Le KDA - (Kill+Assist)/Mort",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "af7osz2r6zgg0f"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "fillOpacity": 80,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineWidth": 1,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 15,
-        "w": 10,
-        "x": 0,
-        "y": 11
-      },
-      "id": 2,
-      "options": {
-        "barRadius": 0,
-        "barWidth": 0.97,
-        "fullHighlight": false,
-        "groupWidth": 0.7,
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "right",
-          "showLegend": false
-        },
-        "orientation": "auto",
-        "showValue": "never",
-        "stacking": "normal",
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        },
-        "xTickLabelRotation": 0,
-        "xTickLabelSpacing": 0
-      },
-      "pluginVersion": "12.3.0",
-      "targets": [
-        {
-          "dataset": "warehouse",
-          "editorMode": "code",
-          "format": "table",
-          "rawQuery": true,
-          "rawSql": "SELECT \r\n  champion_name AS \"Nom du champion\",\r\n  avg_physical_damage_per_minute AS \"Dégâts physiques\",\r\n  avg_magic_damage_per_minute AS \"Dégâts magiques\",\r\n  avg_true_damage_per_minute AS \"Dégâts brute\"\r\n\r\nFROM lol_mart_datas.lol_kpi_stats_per_player_champion\r\nWHERE game_name = 'JeanPomme'\r\nORDER BY avg_damage_per_minute DESC\r\nLIMIT 10",
-          "refId": "A",
-          "sql": {
-            "columns": [
-              {
-                "parameters": [],
-                "type": "function"
-              }
-            ],
-            "groupBy": [
-              {
-                "property": {
-                  "type": "string"
-                },
-                "type": "groupBy"
-              }
-            ],
-            "limit": 50
-          }
-        }
-      ],
-      "title": "Dégâts par minute/champion",
-      "type": "barchart"
-    },
-    {
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "af7osz2r6zgg0f"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [],
-          "thresholds": {
-            "mode": "percentage",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "orange",
-                "value": 70
-              },
-              {
-                "color": "red",
-                "value": 85
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 14,
-        "x": 10,
-        "y": 11
-      },
-      "id": 7,
-      "options": {
-        "minVizHeight": 75,
-        "minVizWidth": 75,
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": false,
-        "sizing": "auto"
-      },
-      "pluginVersion": "12.3.0",
-      "targets": [
-        {
-          "dataset": "warehouse",
-          "editorMode": "code",
-          "format": "table",
-          "rawQuery": true,
-          "rawSql": "SELECT \r\n  tanking_index AS \"Tanking\",\r\n  damage_index AS \"Carry\",\r\n  support_index AS \"Support\"\r\n  \r\nFROM \r\n  lol_mart_datas.lol_kpi_stats_per_player\r\nWHERE game_name = 'JeanPomme'",
-          "refId": "A",
-          "sql": {
-            "columns": [
-              {
-                "parameters": [],
-                "type": "function"
-              }
-            ],
-            "groupBy": [
-              {
-                "property": {
-                  "type": "string"
-                },
-                "type": "groupBy"
-              }
-            ],
-            "limit": 50
-          }
-        }
-      ],
-      "title": "Indices de performance",
-      "type": "gauge"
-    },
-    {
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "af7osz2r6zgg0f"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 10,
-        "y": 18
-      },
-      "id": 8,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.3.0",
-      "targets": [
-        {
-          "dataset": "warehouse",
-          "editorMode": "code",
-          "format": "table",
-          "rawQuery": true,
-          "rawSql": "SELECT \r\n  avg_cs_per_minute AS \"Creeps par minute\",\r\n  avg_gold_per_minute AS \"Gold par minute\"\r\nFROM \r\n  lol_mart_datas.lol_kpi_stats_per_player\r\nWHERE game_name = 'JeanPomme'",
-          "refId": "A",
-          "sql": {
-            "columns": [
-              {
-                "parameters": [],
-                "type": "function"
-              }
-            ],
-            "groupBy": [
-              {
-                "property": {
-                  "type": "string"
-                },
-                "type": "groupBy"
-              }
-            ],
-            "limit": 50
-          }
-        }
-      ],
-      "title": "Farm et économie",
+      "title": "Nombre de game (en base)",
       "type": "stat"
     },
     {
@@ -753,12 +742,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "transparent",
                 "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
               }
             ]
           },
@@ -768,9 +753,9 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 8,
-        "x": 16,
-        "y": 18
+        "w": 7,
+        "x": 17,
+        "y": 12
       },
       "id": 9,
       "options": {
@@ -795,7 +780,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT \r\n  avg_multi_kill_score AS \"Score\"\r\n\r\nFROM \r\n\r\n  lol_mart_datas.lol_kpi_stats_per_player\r\n\r\nWHERE game_name = 'JeanPomme'",
+          "rawSql": "SELECT \r\n  avg_multi_kill_score AS \"Score\"\r\nFROM \r\n  lol_mart_datas.lol_kpi_stats_per_champion\r\nWHERE \r\n  champion_name = '$champion_name'",
           "refId": "A",
           "sql": {
             "columns": [
@@ -844,15 +829,46 @@
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Creeps par minute"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Gold par minute"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 10,
-        "y": 22
+        "w": 8,
+        "x": 9,
+        "y": 16
       },
-      "id": 10,
+      "id": 8,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -877,7 +893,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT \r\n  total_games\r\nFROM \r\n  lol_mart_datas.lol_kpi_stats_per_player\r\nWHERE game_name = 'JeanPomme'",
+          "rawSql": "SELECT \r\n  avg_cs_per_minute AS \"Creeps par minute\",\r\n  avg_gold_per_minute AS \"Gold par minute\"\r\nFROM \r\n  lol_mart_datas.lol_kpi_stats_per_champion\r\nWHERE \r\n  champion_name = '$champion_name'",
           "refId": "A",
           "sql": {
             "columns": [
@@ -898,7 +914,7 @@
           }
         }
       ],
-      "title": "Nombre de game (en base)",
+      "title": "Farm et économie",
       "type": "stat"
     },
     {
@@ -928,9 +944,9 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 8,
-        "x": 16,
-        "y": 22
+        "w": 7,
+        "x": 17,
+        "y": 16
       },
       "id": 11,
       "options": {
@@ -955,7 +971,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT \r\n  penta_rate AS \"Score\"\r\n\r\nFROM \r\n\r\n  lol_mart_datas.lol_kpi_stats_per_player\r\n\r\nWHERE game_name = 'JeanPomme'",
+          "rawSql": "SELECT \r\n  penta_rate AS \"Score\"\r\nFROM \r\n  lol_mart_datas.lol_kpi_stats_per_champion\r\nWHERE \r\n  champion_name = '$champion_name'",
           "refId": "A",
           "sql": {
             "columns": [
@@ -984,15 +1000,33 @@
   "schemaVersion": 42,
   "tags": [],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "allowCustomValue": false,
+        "current": {
+          "text": "Aatrox",
+          "value": "Aatrox"
+        },
+        "definition": "SELECT DISTINCT champion_name\nFROM lol_mart_datas.lol_kpi_stats_per_champion;",
+        "hide": 1,
+        "label": "Nom du champion",
+        "name": "champion_name",
+        "options": [],
+        "query": "SELECT DISTINCT champion_name\nFROM lol_mart_datas.lol_kpi_stats_per_champion;",
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      }
+    ]
   },
   "time": {
-    "from": "2026-01-09T14:11:42.042Z",
-    "to": "2026-01-09T20:11:53.920Z"
+    "from": "now-6h",
+    "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "JeanPomme",
-  "uid": "aiblcfr",
-  "version": 26
+  "title": "Par champion",
+  "uid": "aifmpls",
+  "version": 4
 }
