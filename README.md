@@ -23,7 +23,7 @@
 
 ## 🔹 État du projet
 Statut : ✅ TERMINÉ
-Date de fin : 31/12/2025
+Date de fin : 13/01/2026
 
 Objectifs atteints :
 
