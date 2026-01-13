@@ -20,8 +20,7 @@ OBJECTIF = "Ce DAG vise à extraire les PUUIDs des joueurs League of Legends dep
 "et stocker ces informations dans une table factuelle dédiée dans l'entrepôt de données."
 REMARQUE = "Assurez-vous que les clés API Riot Games sont correctement configurées dans le gestionnaire de connexions avant d'exécuter ce DAG." \
 " Si il n'y a pas de nouvelles données à traiter, le DAG skipera les étapes inutiles."
-# SCHEDULE = "*/3 19-23 * * *" # Tous les jours toutes les 3 minutes entre 19h et 23h
-SCHEDULE = "*/3 10-18 * * *"
+SCHEDULE = "*/3 19-23 * * *" # Tous les jours toutes les 3 minutes entre 19h et 23h
 START_DATE = datetime(2025, 1, 1)
 TAGS = [library.TagsLibrary.LEAGUE_OF_LEGENDS, library.TagsLibrary.RIOT_GAMES, library.TagsLibrary.WAREHOUSE, library.TagsLibrary.DATA_ROWS, library.TagsLibrary.DATA_FACT]
 

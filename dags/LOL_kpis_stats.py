@@ -18,9 +18,12 @@ from app.tasks.decorateurs import customTask
 from airflow.exceptions import AirflowFailException, AirflowSkipException
 
 DAG_ID = "LOL_kpis_stats"
-DESCRIPTION = ""
-OBJECTIF = ""
-SCHEDULE = None
+DESCRIPTION = " Calcul des KPI de performances des joueurs/champions à partir des statistiques de matchs League of Legends."
+OBJECTIF = " Ce DAG vise à extraire les statistiques complètes des matchs des joueurs League of Legends depuis une table factuelle," \
+"calculer divers KPI de performances par joueur et par champion," \
+"et stocker ces KPI dans des tables factuelles dédiées dans l'entrepôt de données."
+REMARQUE = "Assurez-vous que les données sources sont correctement mises à jour avant d'exécuter ce DAG."
+SCHEDULE = "0 0 * * *"  # Tous les jours à 00h00
 START_DATE = datetime(2025, 1, 1)
 TAGS = []
 
@@ -41,7 +44,7 @@ class Custom():
         per_champion: bool = False,
         **kwargs
     ) -> Any:
-        """ Calcul des KPI de performance des joueurs par champion.
+        """ Calcul des KPI de performances des joueurs/champions à partir des statistiques de matchs.
 
         Args:
             xcom_source (str): Source XCom pour récupérer les données de statistiques.
@@ -85,8 +88,10 @@ class Custom():
             >>> kpi = Custom.kpi(
             ...     task_id="kpi_task",
             ...     xcom_source="get_stats_task",
+            ...     per_player=True,
+            ...     per_champion=False,
             ... )
-            Les KPI calculés seront accessibles via XCom.
+            Les KPI calculés seront disponibles dans XCom pour une utilisation ultérieure.
         
         """
         df_stats = manager.Xcom.get(
@@ -247,6 +252,7 @@ with DAG(
     """,
 ) as dag:
     
+    # Définition des colonnes de correspondance pour l'insertion dans la table factuelle
     match_columns = {
         "avg_damage_per_minute": "avg_damage_per_minute",
         "avg_physical_damage_per_minute": "avg_physical_damage_per_minute",
@@ -281,6 +287,7 @@ with DAG(
         "support_index": "support_index",
     }
 
+    # Extraction des statistiques complètes des PUUIDs à traiter
     get_full_stats_by_puuid_to_process = databases.PostgresWarehouse.extract(
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
         schema="lol_fact_datas",
@@ -307,6 +314,7 @@ with DAG(
         ],
     )
 
+    # Extraction des statistiques complètes par champion
     get_full_stats_by_champion = databases.PostgresWarehouse.extract(
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
         schema="lol_fact_datas",
@@ -326,8 +334,10 @@ with DAG(
         ],
     )
 
+    # Groupe de tâches pour le calcul des KPI par joueur
     with TaskGroup("groupe_per_player") as groupe_per_player:
 
+        # Tâche de calcul des KPI par joueur
         task_kpi_per_player = Custom.kpi(
             task_id = "task_kpi_per_player",
             xcom_source = "get_full_stats_by_puuid_to_process",
@@ -335,6 +345,7 @@ with DAG(
             per_player = True,
         )
 
+        # Insertion des données brutes dans la table d'entrepôt
         insert_lol_raw_kpi_per_player = databases.PostgresWarehouse.insert(
             task_id="insert_lol_raw_kpi_per_player",
             xcom_source="groupe_per_player.task_kpi_per_player",
@@ -344,6 +355,7 @@ with DAG(
             if_table_exists="replace",
         )
 
+        # Définition des colonnes non appariées spécifiques par joueur
         non_match_columns_per_player = match_columns.copy()
         non_match_columns_per_player["game_name"] = "game_name"
 
@@ -367,8 +379,10 @@ with DAG(
             raw_to_fact_kpi_per_player,
         )
 
+    # Groupe de tâches pour le calcul des KPI par joueur et par champion
     with TaskGroup("groupe_per_player_champion") as groupe_per_player_champion:
 
+        # Tâche de calcul des KPI par joueur et par champion
         task_kpi_per_player_champion = Custom.kpi(
             task_id = "task_kpi_per_player_champion",
             xcom_source = "get_full_stats_by_puuid_to_process",
@@ -386,6 +400,7 @@ with DAG(
             if_table_exists="replace",
         )
 
+        # Définition des colonnes non appariées spécifiques par joueur et par champion
         non_match_columns_per_player_champion = match_columns.copy()
         non_match_columns_per_player_champion["game_name"] = "game_name"
         non_match_columns_per_player_champion["champion_name"] = "champion_name"
@@ -410,8 +425,10 @@ with DAG(
             raw_to_fact_kpi_per_player_champion,
         )
 
+    # Groupe de tâches pour le calcul des KPI par champion
     with TaskGroup("groupe_per_champion") as groupe_per_champion:
 
+        # Tâche de calcul des KPI par champion
         task_kpi_per_champion = Custom.kpi(
             task_id = "task_kpi_per_champion",
             xcom_source = "get_full_stats_by_champion",
@@ -429,6 +446,7 @@ with DAG(
             if_table_exists="replace",
         )
 
+        # Définition des colonnes non appariées spécifiques par champion
         non_match_columns_per_champion = match_columns.copy()
         non_match_columns_per_champion["champion_name"] = "champion_name"
         non_match_columns_per_champion["champion_id"] = "champion_id"

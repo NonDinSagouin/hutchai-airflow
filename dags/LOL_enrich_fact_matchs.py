@@ -8,6 +8,7 @@ from airflow.sdk import chain, Asset
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
+import app.tasks.transformation as transformation
 import app.tasks.api as api
 import app.tasks.databases as databases
 import app.manager as manager
@@ -76,10 +77,17 @@ with DAG(
         queue=QUEUE_ARAM,
     )
 
+    # Suppression des doublons éventuels
+    drop_duplicates_stats = transformation.Clean.drop_duplicates(
+        task_id="drop_duplicates_stats",
+        xcom_source="fetch_matchs_by_puuid",
+        subset_columns=["match_id"],
+    )
+
     # Insertion des données brutes dans la table d'entrepôt
     insert_raw_matchs = databases.PostgresWarehouse.insert(
         task_id="insert_raw_matchs",
-        xcom_source="fetch_matchs_by_puuid",
+        xcom_source="drop_duplicates_stats",
         engine=manager.Connectors.postgres("POSTGRES_warehouse"),
         table_name="lol_raw_match_datas_ids",
         schema="lol_raw_datas",
@@ -120,6 +128,7 @@ with DAG(
     chain(
         get_puuid,
         fetch_matchs_by_puuid,
+        drop_duplicates_stats,
         insert_raw_matchs,
         raw_to_fact_matchs,
         update_puuid_status,
